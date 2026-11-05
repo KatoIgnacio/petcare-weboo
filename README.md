@@ -108,6 +108,17 @@ También se implementaron rutas auxiliares para consultar, actualizar y desactiv
 
 La eliminación de clientes y mascotas es lógica para conservar el historial.
 
+### Datos de demostración ampliados
+
+El archivo `database/demo-data.sql` agrega clientes, mascotas, veterinarios,
+reservas en distintos estados, atenciones y medicamentos. Es idempotente: se
+puede ejecutar nuevamente sin duplicar el conjunto de demostración.
+
+```powershell
+docker cp database/demo-data.sql petcare-postgres:/tmp/demo-data.sql
+docker exec petcare-postgres psql -U postgres -d petcare -f /tmp/demo-data.sql
+```
+
 ## Pruebas
 
 ```powershell
