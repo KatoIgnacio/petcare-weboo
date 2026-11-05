@@ -1,0 +1,200 @@
+{
+  "info": {
+    "_postman_id": "08fd0499-28b9-472e-81e8-79d4bf67186a",
+    "name": "PetCare - Flujo de demostración",
+    "description": "Prueba el backend Spring Boot y las tres APIs externas comprometidas en el reporte.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.environment.get('sufijo')) {",
+          "  const sufijo = Date.now().toString();",
+          "  pm.environment.set('sufijo', sufijo);",
+          "  const fecha = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);",
+          "  fecha.setSeconds(0, 0);",
+          "  pm.environment.set('fechaReserva', fecha.toISOString().replace('Z', ''));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Crear cliente",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"ana.{{sufijo}}@ejemplo.cl\",\n  \"telefono\": \"+56911111111\"\n}"
+        },
+        "url": "{{baseUrl}}/api/clientes"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Cliente creado', () => pm.response.to.have.status(201));",
+          "pm.environment.set('clienteId', pm.response.json().id);"
+        ] }
+      }]
+    },
+    {
+      "name": "02 - Crear mascota",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Luna\",\n  \"especie\": \"Perro\",\n  \"raza\": \"Mestiza\",\n  \"fechaNacimiento\": \"2021-04-10\",\n  \"peso\": 12.5\n}"
+        },
+        "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Mascota creada', () => pm.response.to.have.status(201));",
+          "pm.environment.set('mascotaId', pm.response.json().id);"
+        ] }
+      }]
+    },
+    {
+      "name": "03 - Listar mascotas del cliente",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas" },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Lista disponible', () => pm.response.to.have.status(200));",
+          "pm.test('Incluye la mascota', () => pm.expect(pm.response.json().length).to.be.above(0));"
+        ] }
+      }]
+    },
+    {
+      "name": "04 - Crear veterinario",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Dr. Carlos Díaz\",\n  \"especialidad\": \"Medicina general\",\n  \"email\": \"carlos.{{sufijo}}@petcare.cl\"\n}"
+        },
+        "url": "{{baseUrl}}/api/veterinarios"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Veterinario creado', () => pm.response.to.have.status(201));",
+          "pm.environment.set('veterinarioId', pm.response.json().id);"
+        ] }
+      }]
+    },
+    {
+      "name": "05 - Crear reserva",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaReserva}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/reservas"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Reserva creada', () => pm.response.to.have.status(201));",
+          "pm.test('Estado pendiente', () => pm.expect(pm.response.json().estado).to.eql('PENDIENTE'));",
+          "pm.environment.set('reservaId', pm.response.json().id);"
+        ] }
+      }]
+    },
+    {
+      "name": "06 - Confirmar reserva y notificar",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"estado\": \"CONFIRMADA\"\n}" },
+        "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Reserva confirmada', () => pm.response.to.have.status(200));",
+          "pm.test('Estado confirmado', () => pm.expect(pm.response.json().estado).to.eql('CONFIRMADA'));"
+        ] }
+      }]
+    },
+    {
+      "name": "07 - Registrar atención",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"diagnostico\": \"Dermatitis leve\",\n  \"tratamiento\": \"Tratamiento tópico por siete días\",\n  \"medicamentos\": [\"Clorhexidina\"],\n  \"observaciones\": \"Control en una semana\"\n}"
+        },
+        "url": "{{baseUrl}}/api/reservas/{{reservaId}}/atencion"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Atención registrada', () => pm.response.to.have.status(201));"
+        ] }
+      }]
+    },
+    {
+      "name": "08 - Consultar reserva atendida",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/reservas/{{reservaId}}" },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Reserva disponible', () => pm.response.to.have.status(200));",
+          "pm.test('Reserva atendida', () => pm.expect(pm.response.json().estado).to.eql('ATENDIDA'));"
+        ] }
+      }]
+    },
+    {
+      "name": "09 - Buscar medicamento externo",
+      "request": { "method": "GET", "url": "{{externalUrl}}/api/medicamentos?nombre=amoxicilina" },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Medicamento encontrado', () => pm.response.to.have.status(200));"
+        ] }
+      }]
+    },
+    {
+      "name": "10 - Consultar ubicación externa",
+      "request": { "method": "GET", "url": "{{externalUrl}}/api/ubicacion-clinica" },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Ubicación disponible', () => pm.response.to.have.status(200));",
+          "pm.test('Incluye coordenadas', () => pm.expect(pm.response.json()).to.have.keys('latitud', 'longitud'));"
+        ] }
+      }]
+    },
+    {
+      "name": "11 - Notificación externa directa",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"destinatario\": \"ana.{{sufijo}}@ejemplo.cl\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Reserva confirmada\",\n  \"mensaje\": \"Su reserva fue confirmada\",\n  \"reservaId\": {{reservaId}}\n}"
+        },
+        "url": "{{externalUrl}}/api/notificaciones"
+      },
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Notificación aceptada', () => pm.response.to.have.status(202));"
+        ] }
+      }]
+    }
+  ]
+}
+
