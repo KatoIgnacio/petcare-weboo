@@ -11,7 +11,7 @@ Avance de desarrollo del sistema de gestión de atención veterinaria para la as
 - Validación de datos y manejo uniforme de errores HTTP.
 - Prevención de reservas duplicadas para el veterinario o la mascota.
 - Estados `PENDIENTE`, `CONFIRMADA`, `CANCELADA` y `ATENDIDA`.
-- Servicio Node independiente para medicamentos, ubicación y notificaciones.
+- Servicio Node para medicamentos, ubicación y aceptación simulada de notificaciones, en el repositorio hermano `petcare-external-api`.
 - Pruebas automatizadas del flujo principal.
 - Flujo integrado verificado con PostgreSQL 17 y la API externa en ejecución.
 
@@ -26,25 +26,32 @@ Avance de desarrollo del sistema de gestión de atención veterinaria para la as
 ## Estructura principal
 
 ```text
-petcare/
-|- src/main/java/cl/bello/petcare/
-|  |- controller/
-|  |- service/
-|  |- repository/
-|  |- entity/
-|  |- dto/
-|  |- exception/
-|  `- config/
-|- src/main/resources/
-|  |- schema.sql
-|  |- data.sql
-|  `- application.properties
-|- external-api/
-|- postman/
-`- compose.yaml
+WebOO/
+|- petcare-weboo/
+|  |- src/main/java/cl/bello/petcare/
+|  |  |- controller/
+|  |  |- service/
+|  |  |- repository/
+|  |  |- entity/
+|  |  |- dto/
+|  |  |- exception/
+|  |  `- config/
+|  |- src/main/resources/
+|  |  |- schema.sql
+|  |  |- data.sql
+|  |  `- application.properties
+|  |- docs/
+|  |- postman/
+|  `- compose.yaml
+`- petcare-external-api/
+   |- server.js
+   |- package.json
+   `- README.md
 ```
 
 ## Ejecución
+
+Se requiere Java 21, Node.js 20 o posterior y Docker Desktop. Los comandos de PostgreSQL y Spring se ejecutan desde la raíz de `petcare-weboo`. El repositorio `petcare-external-api` debe estar en la carpeta hermana indicada en la estructura.
 
 ### 1. Iniciar Docker Desktop
 
@@ -53,8 +60,7 @@ Esperar hasta que el motor de Docker aparezca activo.
 ### 2. Iniciar PostgreSQL
 
 ```powershell
-cd C:\Users\KATO\Desktop\WebOS\petcare
-docker compose up -d
+docker compose up -d postgres
 docker compose ps
 ```
 
@@ -62,25 +68,40 @@ El contenedor `petcare-postgres` debe aparecer como `healthy`.
 
 ### 3. Iniciar la API externa
 
-En una segunda terminal:
+En una segunda terminal, comenzando desde la raíz de `petcare-weboo`, ejecutar
 
 ```powershell
-cd C:\Users\KATO\Desktop\WebOS\petcare\external-api
-npm start
+Set-Location ..\petcare-external-api
+$env:HOST = '127.0.0.1'
+$env:PORT = '3001'
+npm.cmd start
 ```
 
 Se debe mostrar `PetCare external API disponible`.
 
 ### 4. Iniciar Spring Boot
 
-En una tercera terminal:
+En una tercera terminal, desde la raíz de `petcare-weboo`, seleccionar el JDK 21 instalado y ejecutar. La ruta siguiente corresponde al equipo de desarrollo y debe ajustarse si la instalación de Java está en otra ubicación.
 
 ```powershell
-cd C:\Users\KATO\Desktop\WebOS\petcare
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.12.1'
+$env:EXTERNAL_API_URL = 'http://localhost:3001'
 .\gradlew.bat bootRun
 ```
 
 La aplicación queda disponible en `http://localhost:8082`.
+
+### Configuración de la API externa
+
+`EXTERNAL_API_URL` define la dirección que Spring utiliza para consumir Node y tiene el valor predeterminado `http://localhost:3001`. Para ejecutar Node en otro equipo, asignar la URL de ese equipo antes de iniciar Spring, por ejemplo `http://192.168.1.25:3001`.
+
+Las variables se asignan en la terminal que inicia cada proceso. Spring lee `DB_URL`, `DB_USER`, `DB_PASSWORD`, `SERVER_PORT`, `EXTERNAL_API_URL` y `CORS_ALLOWED_ORIGINS` según `application.properties`. Node lee `HOST` y `PORT` según su README.
+
+Para repetir verificaciones sobre la base separada del diagnóstico, asignar también la siguiente variable en la terminal de Spring antes de iniciar la aplicación.
+
+```powershell
+$env:DB_URL = 'jdbc:postgresql://localhost:5433/petcare_diagnostico_20261117'
+```
 
 ## Endpoints del reporte
 
@@ -122,7 +143,7 @@ docker exec petcare-postgres psql -U postgres -d petcare -f /tmp/demo-data.sql
 ## Pruebas
 
 ```powershell
-cd C:\Users\KATO\Desktop\WebOS\petcare
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.12.1'
 .\gradlew.bat check
 ```
 
@@ -138,6 +159,8 @@ Resultado actual: `3` pruebas automatizadas aprobadas y empaquetado `bootJar` ex
 ## Postman
 
 Importar los dos archivos ubicados en `postman/`, seleccionar el entorno `PetCare Local` y ejecutar la colección completa en orden.
+
+`baseUrl` apunta a Spring y `externalUrl` al servicio Node. El diagnóstico inicial documenta una aserción pendiente en ubicación y el tratamiento de fechas de la colección. Los resultados de la separación se encuentran en [el informe de la etapa 2](docs/separacion-api-externa.md).
 
 ## Nota sobre medicamentos
 
