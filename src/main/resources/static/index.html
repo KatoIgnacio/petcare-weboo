@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f3">
+  <title>PetCare</title>
+  <script src="/js/tema.js"></script>
+  <link rel="stylesheet" href="/css/petcare.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" id="saltar" href="#contenido">Ir al contenido</a>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="#/agenda">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></span>
+        <span>PetCare <small>Gestión veterinaria</small></span>
+      </a>
+      <nav aria-label="Navegación principal">
+        <a href="#/agenda"><i class="icon icon-agenda" aria-hidden="true"></i>Agenda</a>
+        <a href="#/clientes"><i class="icon icon-clientes" aria-hidden="true"></i>Clientes y mascotas</a>
+        <a href="#/veterinarios"><i class="icon icon-veterinarios" aria-hidden="true"></i>Veterinarios</a>
+        <a href="#/medicamentos"><i class="icon icon-medicamentos" aria-hidden="true"></i>Medicamentos</a>
+        <a href="#/clinica"><i class="icon icon-clinica" aria-hidden="true"></i>Clínica</a>
+      </nav>
+    </aside>
+    <main id="contenido" tabindex="-1">
+      <div id="vista" aria-busy="true">
+        <p class="startup" role="status">Abriendo PetCare…</p>
+      </div>
+    </main>
+  </div>
+  <p id="confirmacion" class="toast" role="status" aria-atomic="true"></p>
+  <button id="tema" class="theme-switch" type="button" aria-label="Modo oscuro" aria-pressed="false" hidden>
+    <span class="theme-sun" aria-hidden="true"></span>
+    <span class="theme-moon" aria-hidden="true"></span>
+  </button>
+  <dialog id="panel" aria-labelledby="titulo-panel">
+    <div class="dialog-header">
+      <h2 id="titulo-panel"></h2>
+      <button id="cerrar-panel" type="button" class="close-button" aria-label="Cerrar">×</button>
+    </div>
+    <div id="contenido-panel" class="dialog-body"></div>
+  </dialog>
+</body>
+</html>

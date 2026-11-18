@@ -21,6 +21,7 @@ import cl.bello.petcare.entity.EstadoReserva;
 import cl.bello.petcare.repository.AtencionMedicaRepository;
 import cl.bello.petcare.repository.ClienteRepository;
 import cl.bello.petcare.repository.MascotaRepository;
+import cl.bello.petcare.repository.NotificacionRepository;
 import cl.bello.petcare.repository.ReservaRepository;
 import cl.bello.petcare.repository.VeterinarioRepository;
 import cl.bello.petcare.service.ClienteService;
@@ -89,9 +90,12 @@ class PetcareApplicationTests {
 
 	@Autowired
 	private ClienteRepository clienteRepository;
+	@Autowired
+	private NotificacionRepository notificacionRepository;
 
 	@BeforeEach
 	void limpiarBase() {
+		notificacionRepository.deleteAll();
 		atencionRepository.deleteAll();
 		reservaRepository.deleteAll();
 		mascotaRepository.deleteAll();

@@ -1,6 +1,7 @@
 package cl.bello.petcare.controller;
 
 import cl.bello.petcare.dto.MascotaRequest;
+import cl.bello.petcare.dto.AtencionResponse;
 import cl.bello.petcare.dto.MascotaResponse;
 import cl.bello.petcare.service.MascotaService;
 import jakarta.validation.Valid;
@@ -42,6 +43,11 @@ public class MascotaController {
 	@GetMapping("/mascotas/{id}")
 	public MascotaResponse obtener(@PathVariable Long id) {
 		return mascotaService.obtener(id);
+	}
+
+	@GetMapping("/mascotas/{id}/historial")
+	public List<AtencionResponse> historial(@PathVariable Long id) {
+		return mascotaService.historial(id);
 	}
 
 	@PutMapping("/mascotas/{id}")

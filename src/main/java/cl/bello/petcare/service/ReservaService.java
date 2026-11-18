@@ -3,6 +3,7 @@ package cl.bello.petcare.service;
 import cl.bello.petcare.dto.AtencionRequest;
 import cl.bello.petcare.dto.AtencionResponse;
 import cl.bello.petcare.dto.EstadoReservaRequest;
+import cl.bello.petcare.dto.ReservaAgendaResponse;
 import cl.bello.petcare.dto.ReservaRequest;
 import cl.bello.petcare.dto.ReservaResponse;
 import cl.bello.petcare.dto.ReservaUpdateRequest;
@@ -17,8 +18,10 @@ import cl.bello.petcare.repository.AtencionMedicaRepository;
 import cl.bello.petcare.repository.MascotaRepository;
 import cl.bello.petcare.repository.ReservaRepository;
 import cl.bello.petcare.repository.VeterinarioRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,26 +36,25 @@ public class ReservaService {
 	private final VeterinarioRepository veterinarioRepository;
 	private final ReservaRepository reservaRepository;
 	private final AtencionMedicaRepository atencionRepository;
-	private final NotificacionClient notificacionClient;
+	private final NotificacionService notificacionService;
 
 	public ReservaService(
 			MascotaRepository mascotaRepository,
 			VeterinarioRepository veterinarioRepository,
 			ReservaRepository reservaRepository,
 			AtencionMedicaRepository atencionRepository,
-			NotificacionClient notificacionClient) {
+			NotificacionService notificacionService) {
 		this.mascotaRepository = mascotaRepository;
 		this.veterinarioRepository = veterinarioRepository;
 		this.reservaRepository = reservaRepository;
 		this.atencionRepository = atencionRepository;
-		this.notificacionClient = notificacionClient;
+		this.notificacionService = notificacionService;
 	}
 
 	@Transactional
 	public ReservaResponse crear(ReservaRequest request) {
 		validarFechaFutura(request.fechaHora());
-		Mascota mascota = mascotaRepository.buscarActivaParaActualizar(request.mascotaId())
-				.orElseThrow(() -> new RecursoNoEncontradoException("Mascota no encontrada"));
+		Mascota mascota = buscarMascotaParaActualizar(request.mascotaId());
 		Veterinario veterinario = veterinarioRepository.buscarActivoParaActualizar(request.veterinarioId())
 				.orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
 		validarDisponibilidad(mascota.getId(), veterinario.getId(), request.fechaHora(), null);
@@ -62,10 +64,20 @@ public class ReservaService {
 	}
 
 	@Transactional(readOnly = true)
+	public List<ReservaAgendaResponse> listar(LocalDate fecha, Long veterinarioId) {
+		if (veterinarioId != null && veterinarioId <= 0) {
+			throw new IllegalArgumentException("veterinarioId debe ser un entero positivo");
+		}
+		LocalDateTime desde = fecha == null ? null : fecha.atStartOfDay();
+		LocalDateTime hasta = fecha == null ? null : fecha.plusDays(1).atStartOfDay();
+		return reservaRepository.buscarAgenda(desde, hasta, veterinarioId);
+	}
+
+	@Transactional(readOnly = true)
 	public ReservaResponse obtener(Long id) {
 		Reserva reserva = buscarDetalle(id);
 		AtencionMedica atencion = atencionRepository.findByReservaId(id).orElse(null);
-		return toResponse(reserva, "NO_APLICA", atencion);
+		return toResponse(reserva, notificacionService.resultado(id), atencion);
 	}
 
 	@Transactional
@@ -76,8 +88,7 @@ public class ReservaService {
 				|| reserva.getEstado() == EstadoReserva.ATENDIDA) {
 			throw new ConflictoException("La reserva ya no puede ser modificada");
 		}
-		Mascota mascota = mascotaRepository.buscarActivaParaActualizar(reserva.getMascota().getId())
-				.orElseThrow(() -> new RecursoNoEncontradoException("Mascota no encontrada"));
+		Mascota mascota = buscarMascotaParaActualizar(reserva.getMascota().getId());
 		Veterinario veterinario = veterinarioRepository.buscarActivoParaActualizar(request.veterinarioId())
 				.orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
 		validarDisponibilidad(mascota.getId(), veterinario.getId(), request.fechaHora(), id);
@@ -106,7 +117,7 @@ public class ReservaService {
 
 		reserva.setEstado(request.estado());
 		reservaRepository.saveAndFlush(reserva);
-		String notificacion = notificacionClient.enviarCambioReserva(reserva);
+		String notificacion = notificacionService.registrarCambio(reserva);
 		return toResponse(reserva, notificacion, atencionRepository.findByReservaId(id).orElse(null));
 	}
 
@@ -175,6 +186,15 @@ public class ReservaService {
 	private Reserva buscarDetalle(Long id) {
 		return reservaRepository.buscarDetalle(id)
 				.orElseThrow(() -> new RecursoNoEncontradoException("Reserva no encontrada"));
+	}
+
+	private Mascota buscarMascotaParaActualizar(Long id) {
+		Mascota mascota = mascotaRepository.buscarActivaParaActualizar(id)
+				.orElseThrow(() -> new RecursoNoEncontradoException("Mascota no encontrada"));
+		if (!mascota.getCliente().isActivo()) {
+			throw new RecursoNoEncontradoException("Cliente no encontrado");
+		}
+		return mascota;
 	}
 
 	private Reserva buscarParaActualizar(Long id) {

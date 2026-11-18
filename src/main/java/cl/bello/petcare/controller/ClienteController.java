@@ -5,6 +5,7 @@ import cl.bello.petcare.dto.ClienteResponse;
 import cl.bello.petcare.service.ClienteService;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +35,11 @@ public class ClienteController {
 	@GetMapping("/{id}")
 	public ClienteResponse obtener(@PathVariable Long id) {
 		return clienteService.obtener(id);
+	}
+
+	@GetMapping
+	public List<ClienteResponse> listar() {
+		return clienteService.listar();
 	}
 
 	@PutMapping("/{id}")

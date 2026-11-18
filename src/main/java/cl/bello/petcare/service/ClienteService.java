@@ -7,6 +7,7 @@ import cl.bello.petcare.exception.ConflictoException;
 import cl.bello.petcare.exception.RecursoNoEncontradoException;
 import cl.bello.petcare.repository.ClienteRepository;
 import cl.bello.petcare.repository.MascotaRepository;
+import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,13 @@ public class ClienteService {
 				email,
 				request.telefono().trim());
 		return toResponse(clienteRepository.save(cliente));
+	}
+
+	@Transactional(readOnly = true)
+	public List<ClienteResponse> listar() {
+		return clienteRepository.findByActivoTrueOrderByNombreAscIdAsc().stream()
+				.map(this::toResponse)
+				.toList();
 	}
 
 	@Transactional(readOnly = true)

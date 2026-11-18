@@ -1,11 +1,13 @@
 package cl.bello.petcare.service;
 
+import cl.bello.petcare.dto.AtencionResponse;
 import cl.bello.petcare.dto.MascotaRequest;
 import cl.bello.petcare.dto.MascotaResponse;
 import cl.bello.petcare.entity.Cliente;
 import cl.bello.petcare.entity.Mascota;
 import cl.bello.petcare.exception.RecursoNoEncontradoException;
 import cl.bello.petcare.repository.ClienteRepository;
+import cl.bello.petcare.repository.AtencionMedicaRepository;
 import cl.bello.petcare.repository.MascotaRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -16,10 +18,15 @@ public class MascotaService {
 
 	private final ClienteRepository clienteRepository;
 	private final MascotaRepository mascotaRepository;
+	private final AtencionMedicaRepository atencionRepository;
 
-	public MascotaService(ClienteRepository clienteRepository, MascotaRepository mascotaRepository) {
+	public MascotaService(
+			ClienteRepository clienteRepository,
+			MascotaRepository mascotaRepository,
+			AtencionMedicaRepository atencionRepository) {
 		this.clienteRepository = clienteRepository;
 		this.mascotaRepository = mascotaRepository;
+		this.atencionRepository = atencionRepository;
 	}
 
 	@Transactional
@@ -43,6 +50,23 @@ public class MascotaService {
 		}
 		return mascotaRepository.findByClienteIdAndActivoTrueOrderByNombreAsc(clienteId).stream()
 				.map(this::toResponse)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<AtencionResponse> historial(Long mascotaId) {
+		if (!mascotaRepository.existsById(mascotaId)) {
+			throw new RecursoNoEncontradoException("Mascota no encontrada");
+		}
+		return atencionRepository.findByReservaMascotaIdOrderByFechaDescIdDesc(mascotaId).stream()
+				.map(atencion -> new AtencionResponse(
+						atencion.getId(),
+						atencion.getReserva().getId(),
+						atencion.getFecha(),
+						atencion.getDiagnostico(),
+						atencion.getTratamiento(),
+						atencion.getMedicamentos(),
+						atencion.getObservaciones()))
 				.toList();
 	}
 

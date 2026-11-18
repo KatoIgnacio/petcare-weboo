@@ -9,15 +9,21 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(RecursoNoEncontradoException.class)
 	public ResponseEntity<ApiError> noEncontrado(
@@ -27,7 +33,7 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler({ConflictoException.class, DataIntegrityViolationException.class,
-			PessimisticLockingFailureException.class})
+			PessimisticLockingFailureException.class, OptimisticLockingFailureException.class})
 	public ResponseEntity<ApiError> conflicto(Exception error, HttpServletRequest request) {
 		String mensaje = error instanceof ConflictoException
 				? error.getMessage()
@@ -35,27 +41,38 @@ public class GlobalExceptionHandler {
 		return respuesta(HttpStatus.CONFLICT, mensaje, request, List.of());
 	}
 
-	@ExceptionHandler(MethodArgumentNotValidException.class)
-	public ResponseEntity<ApiError> validacion(
+	@Override
+	protected ResponseEntity<Object> handleMethodArgumentNotValid(
 			MethodArgumentNotValidException error,
-			HttpServletRequest request) {
+			HttpHeaders headers,
+			HttpStatusCode status,
+			WebRequest request) {
 		List<String> detalles = error.getBindingResult().getFieldErrors().stream()
 				.map(campo -> campo.getField() + ": " + campo.getDefaultMessage())
 				.toList();
-		return respuesta(HttpStatus.BAD_REQUEST, "La solicitud contiene datos inválidos", request, detalles);
+		ApiError body = crearError(status, "La solicitud contiene datos inválidos", ruta(request), detalles);
+		return handleExceptionInternal(error, body, headers, status, request);
 	}
 
-	@ExceptionHandler({IllegalArgumentException.class, ConstraintViolationException.class,
-			HttpMessageNotReadableException.class})
+	@Override
+	protected ResponseEntity<Object> handleHttpMessageNotReadable(
+			HttpMessageNotReadableException error,
+			HttpHeaders headers,
+			HttpStatusCode status,
+			WebRequest request) {
+		ApiError body = crearError(status, "El cuerpo de la solicitud no tiene un formato JSON válido",
+				ruta(request), List.of());
+		return handleExceptionInternal(error, body, headers, status, request);
+	}
+
+	@ExceptionHandler({IllegalArgumentException.class, ConstraintViolationException.class})
 	public ResponseEntity<ApiError> solicitudInvalida(Exception error, HttpServletRequest request) {
-		String mensaje = error instanceof HttpMessageNotReadableException
-				? "El cuerpo de la solicitud no tiene un formato JSON válido"
-				: error.getMessage();
-		return respuesta(HttpStatus.BAD_REQUEST, mensaje, request, List.of());
+		return respuesta(HttpStatus.BAD_REQUEST, error.getMessage(), request, List.of());
 	}
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiError> inesperado(Exception error, HttpServletRequest request) {
+		logger.error("Error inesperado al procesar " + request.getRequestURI(), error);
 		return respuesta(
 				HttpStatus.INTERNAL_SERVER_ERROR,
 				"Ocurrió un error interno al procesar la solicitud",
@@ -63,19 +80,49 @@ public class GlobalExceptionHandler {
 				List.of());
 	}
 
+	@Override
+	protected ResponseEntity<Object> createResponseEntity(
+			Object body, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+		ApiError error = body instanceof ApiError apiError
+				? apiError
+				: crearError(status, mensajeHttp(status), ruta(request), List.of());
+		return new ResponseEntity<>(error, headers, status);
+	}
+
+	private String mensajeHttp(HttpStatusCode status) {
+		return switch (status.value()) {
+			case 400 -> "La solicitud contiene parámetros inválidos";
+			case 404 -> "El recurso solicitado no existe";
+			case 405 -> "El método HTTP no está permitido para este recurso";
+			case 406 -> "El formato de respuesta solicitado no está disponible";
+			case 415 -> "El tipo de contenido de la solicitud no está soportado";
+			default -> status.is5xxServerError()
+					? "Ocurrió un error interno al procesar la solicitud"
+					: "La solicitud no pudo ser procesada";
+		};
+	}
+
+	private String ruta(WebRequest request) {
+		return ((ServletWebRequest) request).getRequest().getRequestURI();
+	}
+
 	private ResponseEntity<ApiError> respuesta(
 			HttpStatus estado,
 			String mensaje,
 			HttpServletRequest request,
 			List<String> detalles) {
-		ApiError cuerpo = new ApiError(
+		return ResponseEntity.status(estado).body(crearError(estado, mensaje, request.getRequestURI(), detalles));
+	}
+
+	private ApiError crearError(HttpStatusCode estado, String mensaje, String ruta, List<String> detalles) {
+		HttpStatus codigo = HttpStatus.resolve(estado.value());
+		return new ApiError(
 				LocalDateTime.now(),
 				estado.value(),
-				estado.getReasonPhrase(),
+				codigo == null ? "HTTP " + estado.value() : codigo.getReasonPhrase(),
 				mensaje,
-				request.getRequestURI(),
+				ruta,
 				detalles);
-		return ResponseEntity.status(estado).body(cuerpo);
 	}
 }
 

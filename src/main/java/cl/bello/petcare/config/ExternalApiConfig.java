@@ -13,12 +13,14 @@ public class ExternalApiConfig {
 
 	@Bean
 	RestClient externalRestClient(
-			@Value("${petcare.external-api.base-url}") String baseUrl) {
+			@Value("${petcare.external-api.base-url}") String baseUrl,
+			@Value("${petcare.external-api.connect-timeout:2s}") Duration connectTimeout,
+			@Value("${petcare.external-api.read-timeout:10s}") Duration readTimeout) {
 		HttpClient httpClient = HttpClient.newBuilder()
-				.connectTimeout(Duration.ofSeconds(2))
+				.connectTimeout(connectTimeout)
 				.build();
 		JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-		requestFactory.setReadTimeout(Duration.ofSeconds(3));
+		requestFactory.setReadTimeout(readTimeout);
 		return RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
 	}
 }

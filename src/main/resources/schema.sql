@@ -53,3 +53,26 @@ CREATE INDEX IF NOT EXISTS idx_mascotas_cliente ON mascotas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_reservas_veterinario_fecha ON reservas(veterinario_id, fecha_hora);
 CREATE INDEX IF NOT EXISTS idx_reservas_mascota_fecha ON reservas(mascota_id, fecha_hora);
 
+CREATE TABLE IF NOT EXISTS notificaciones_pendientes (
+    id BIGSERIAL PRIMARY KEY,
+    clave_evento VARCHAR(36) NOT NULL UNIQUE,
+    reserva_id BIGINT NOT NULL REFERENCES reservas(id),
+    estado_reserva VARCHAR(20) NOT NULL CHECK (estado_reserva IN ('CONFIRMADA', 'CANCELADA')),
+    destinatario VARCHAR(254) NOT NULL,
+    asunto VARCHAR(200) NOT NULL,
+    mensaje VARCHAR(10000) NOT NULL,
+    estado VARCHAR(30) NOT NULL CHECK (estado IN ('PENDIENTE', 'EN_PROCESO', 'PENDIENTE_REINTENTO', 'ACEPTADA', 'FALLIDA', 'INCIERTA')),
+    intentos INTEGER NOT NULL DEFAULT 0,
+    proximo_intento TIMESTAMP WITH TIME ZONE NOT NULL,
+    bloqueada_hasta TIMESTAMP WITH TIME ZONE,
+    token_intento VARCHAR(36),
+    id_externo VARCHAR(100),
+    ultimo_error VARCHAR(200),
+    creada_en TIMESTAMP WITH TIME ZONE NOT NULL,
+    actualizada_en TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uk_notificacion_reserva_estado UNIQUE (reserva_id, estado_reserva)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notificaciones_estado_fecha
+    ON notificaciones_pendientes(estado, proximo_intento);
+
