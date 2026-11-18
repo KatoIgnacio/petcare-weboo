@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${mascota.nombre + ' | PetCare'}">Mascota | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Ficha clínica</p>
+      <h1 th:text="${mascota.nombre}">Mascota</h1>
+      <p>Tutor: <a class="table-link" th:href="@{/clientes/{id}(id=${cliente.id})}" th:text="${cliente.nombre}">Cliente</a></p>
+    </div>
+    <div class="action-row">
+      <a class="button button-secondary" th:href="@{/mascotas/{id}/editar(id=${mascota.id})}">Editar datos</a>
+      <a class="button button-primary" th:href="@{/reservas/nueva(mascotaId=${mascota.id})}">Agendar atención</a>
+    </div>
+  </div>
+
+  <section class="detail-card">
+    <dl class="detail-grid">
+      <div class="detail-item">
+        <dt>Especie</dt>
+        <dd th:text="${mascota.especie}">Especie</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Raza</dt>
+        <dd th:text="${mascota.raza}">Raza</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Peso</dt>
+        <dd th:text="${mascota.peso + ' kg'}">Peso</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Fecha de nacimiento</dt>
+        <dd th:text="${#temporals.format(mascota.fechaNacimiento, 'dd-MM-yyyy')}">Fecha</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Estado</dt>
+        <dd>Activa</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Tutor responsable</dt>
+        <dd th:text="${cliente.nombre}">Tutor</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Seguimiento del paciente</p>
+        <h2>Historial médico</h2>
+      </div>
+    </div>
+    <div th:if="${!#lists.isEmpty(historial)}">
+      <article class="history-item" th:each="atencion : ${historial}">
+        <h3 th:text="${#temporals.format(atencion.fecha, 'dd-MM-yyyy HH:mm')}">Fecha</h3>
+        <p><strong>Diagnóstico:</strong> <span th:text="${atencion.diagnostico}">Diagnóstico</span></p>
+        <p><strong>Tratamiento:</strong> <span th:text="${atencion.tratamiento}">Tratamiento</span></p>
+        <p th:if="${atencion.observaciones}"><strong>Observaciones:</strong> <span th:text="${atencion.observaciones}">Observaciones</span></p>
+        <ul class="tag-list">
+          <li th:each="medicamento : ${atencion.medicamentos}" th:text="${medicamento}">Medicamento</li>
+        </ul>
+      </article>
+    </div>
+    <div class="empty-state" th:if="${#lists.isEmpty(historial)}">
+      <h3>Sin atenciones registradas</h3>
+      <p>El historial se completará cuando una reserva confirmada sea atendida.</p>
+    </div>
+  </section>
+
+  <section class="detail-card danger-zone">
+    <h2>Desactivar mascota</h2>
+    <p class="muted">Su historial médico se conservará, pero no aparecerá al crear nuevas reservas.</p>
+    <form method="post" th:action="@{/mascotas/{id}/eliminar(id=${mascota.id})}"
+          onsubmit="return confirm('¿Desea desactivar esta mascota?');">
+      <input type="hidden" name="clienteId" th:value="${cliente.id}">
+      <button class="button button-danger button-small" type="submit">Desactivar mascota</button>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

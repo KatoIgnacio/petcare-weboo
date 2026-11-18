@@ -19,6 +19,7 @@ import cl.bello.petcare.repository.ReservaRepository;
 import cl.bello.petcare.repository.VeterinarioRepository;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +67,16 @@ public class ReservaService {
 		Reserva reserva = buscarDetalle(id);
 		AtencionMedica atencion = atencionRepository.findByReservaId(id).orElse(null);
 		return toResponse(reserva, "NO_APLICA", atencion);
+	}
+
+	@Transactional(readOnly = true)
+	public List<ReservaResponse> listar() {
+		return reservaRepository.findAllByOrderByFechaHoraDesc().stream()
+				.map(reserva -> toResponse(
+						reserva,
+						"NO_APLICA",
+						atencionRepository.findByReservaId(reserva.getId()).orElse(null)))
+				.toList();
 	}
 
 	@Transactional

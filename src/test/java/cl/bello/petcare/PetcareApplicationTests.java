@@ -108,6 +108,19 @@ class PetcareApplicationTests {
 	}
 
 	@Test
+	void interfazWebRenderizaSusPaginasPrincipalesYElGif() throws Exception {
+		for (String ruta : List.of("/", "/clientes", "/reservas", "/veterinarios", "/integraciones")) {
+			HttpResponse<String> respuesta = get(ruta);
+			assertThat(respuesta.statusCode()).as(ruta).isEqualTo(200);
+			assertThat(respuesta.body()).as(ruta).contains("PetCare");
+		}
+
+		HttpResponse<String> gif = get("/img/perro.gif");
+		assertThat(gif.statusCode()).isEqualTo(200);
+		assertThat(gif.headers().firstValue("Content-Type")).hasValue("image/gif");
+	}
+
+	@Test
 	void endpointsCreanReservaYRechazanHorarioDuplicado() throws Exception {
 		long clienteId = extraerId(post("/api/clientes", """
 				{
@@ -190,6 +203,14 @@ class PetcareApplicationTests {
 				.uri(URI.create("http://localhost:" + puerto + ruta))
 				.header("Content-Type", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(json))
+				.build();
+		return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> get(String ruta) throws Exception {
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create("http://localhost:" + puerto + ruta))
+				.GET()
 				.build();
 		return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 	}

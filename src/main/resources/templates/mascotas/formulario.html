@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${modoEdicion ? 'Editar mascota | PetCare' : 'Nueva mascota | PetCare'}">Mascota | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Paciente de <span th:text="${cliente.nombre}">Cliente</span></p>
+      <h1 th:text="${modoEdicion ? 'Editar mascota' : 'Registrar mascota'}">Registrar mascota</h1>
+      <p>Completa la identificación básica del paciente para mantener su ficha actualizada.</p>
+    </div>
+  </div>
+
+  <section class="form-card">
+    <form method="post"
+          th:action="${modoEdicion} ? @{/mascotas/{id}(id=${mascota.id})} : @{/clientes/{id}/mascotas(id=${cliente.id})}">
+      <div class="form-grid">
+        <div class="field field-full">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" type="text" maxlength="100" required
+                 th:value="${modoEdicion ? mascota.nombre : ''}">
+        </div>
+        <div class="field">
+          <label for="especie">Especie</label>
+          <input id="especie" name="especie" type="text" maxlength="80" required
+                 th:value="${modoEdicion ? mascota.especie : ''}" placeholder="Canina, felina u otra">
+        </div>
+        <div class="field">
+          <label for="raza">Raza</label>
+          <input id="raza" name="raza" type="text" maxlength="100" required
+                 th:value="${modoEdicion ? mascota.raza : ''}">
+        </div>
+        <div class="field">
+          <label for="fechaNacimiento">Fecha de nacimiento</label>
+          <input id="fechaNacimiento" name="fechaNacimiento" type="date" required
+                 th:value="${modoEdicion ? mascota.fechaNacimiento : ''}">
+        </div>
+        <div class="field">
+          <label for="peso">Peso en kilogramos</label>
+          <input id="peso" name="peso" type="number" min="0.1" step="0.01" required
+                 th:value="${modoEdicion ? mascota.peso : ''}">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit" th:text="${modoEdicion ? 'Guardar cambios' : 'Registrar mascota'}">Guardar</button>
+        <a class="button button-secondary"
+           th:href="${modoEdicion} ? @{/mascotas/{id}(id=${mascota.id})} : @{/clientes/{id}(id=${cliente.id})}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

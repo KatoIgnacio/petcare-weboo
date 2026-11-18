@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reservas | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Agenda clínica</p>
+      <h1>Reservas</h1>
+      <p>Revisa el horario, el profesional asignado y el estado de cada atención.</p>
+    </div>
+    <a class="button button-primary" th:href="@{/reservas/nueva}">Nueva reserva</a>
+  </div>
+
+  <section class="panel">
+    <div class="table-wrap" th:if="${!#lists.isEmpty(reservas)}">
+      <table class="data-table">
+        <thead>
+        <tr>
+          <th>Paciente</th>
+          <th>Veterinario</th>
+          <th>Fecha y hora</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="reserva : ${reservas}">
+          <td><a class="table-link" th:href="@{/mascotas/{id}(id=${reserva.mascotaId})}" th:text="${reserva.mascotaNombre}">Paciente</a></td>
+          <td th:text="${reserva.veterinarioNombre}">Veterinario</td>
+          <td th:text="${#temporals.format(reserva.fechaHora, 'dd-MM-yyyy HH:mm')}">Fecha</td>
+          <td><span class="status" th:classappend="'status-' + ${reserva.estado}" th:text="${reserva.estado}">Estado</span></td>
+          <td><a class="button button-secondary button-small" th:href="@{/reservas/{id}(id=${reserva.id})}">Ver reserva</a></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="empty-state" th:if="${#lists.isEmpty(reservas)}">
+      <h3>No hay reservas registradas</h3>
+      <p>La nueva reserva quedará inicialmente en estado pendiente.</p>
+    </div>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

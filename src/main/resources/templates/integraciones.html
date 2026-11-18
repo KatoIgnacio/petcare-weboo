@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Servicios externos | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Integración entre equipos</p>
+      <h1>Servicios externos</h1>
+      <p>Consulta el catálogo demostrativo de medicamentos y la ubicación informada por la API Node.</p>
+    </div>
+  </div>
+
+  <div class="integration-grid">
+    <section class="form-card">
+      <h2>Buscar medicamento</h2>
+      <p class="muted">La consulta se realiza desde Spring hacia el servicio externo configurado.</p>
+      <form method="get" th:action="@{/integraciones}">
+        <div class="field" style="margin-top: 18px;">
+          <label for="nombre">Nombre del medicamento</label>
+          <input id="nombre" name="nombre" type="search" required th:value="${nombreBuscado}"
+                 placeholder="Ejemplo: Meloxicam">
+        </div>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">Consultar catálogo</button>
+        </div>
+      </form>
+
+      <div style="margin-top: 24px;" th:if="${!#lists.isEmpty(medicamentos)}">
+        <article class="history-item" th:each="medicamento : ${medicamentos}">
+          <h3 th:text="${medicamento.nombre}">Medicamento</h3>
+          <p><strong>Principio activo:</strong> <span th:text="${medicamento.principioActivo}">Principio activo</span></p>
+          <p><strong>Presentación:</strong> <span th:text="${medicamento.presentacion}">Presentación</span></p>
+          <p><strong>Advertencia:</strong> <span th:text="${medicamento.advertencias}">Advertencia</span></p>
+          <p class="muted" th:text="${medicamento.fuente}">Fuente</p>
+        </article>
+      </div>
+      <div class="empty-state" style="margin-top: 24px;" th:if="${busquedaRealizada and #lists.isEmpty(medicamentos)}">
+        <h3>Sin resultados disponibles</h3>
+        <p>Revisa el nombre ingresado y confirma que la API Node esté en ejecución.</p>
+      </div>
+    </section>
+
+    <section class="detail-card">
+      <p class="eyebrow">Ubicación clínica</p>
+      <div th:if="${ubicacion != null}">
+        <h2 th:text="${ubicacion.nombre}">Clínica</h2>
+        <p th:text="${ubicacion.direccion}">Dirección</p>
+        <dl class="detail-grid" style="grid-template-columns: 1fr 1fr; margin-top: 18px;">
+          <div class="detail-item">
+            <dt>Latitud</dt>
+            <dd th:text="${ubicacion.latitud}">Latitud</dd>
+          </div>
+          <div class="detail-item">
+            <dt>Longitud</dt>
+            <dd th:text="${ubicacion.longitud}">Longitud</dd>
+          </div>
+        </dl>
+        <div class="form-actions">
+          <a class="button button-sky" th:href="${ubicacion.urlMapa}" target="_blank" rel="noopener noreferrer">Abrir mapa</a>
+        </div>
+      </div>
+      <div class="empty-state" th:if="${ubicacion == null}">
+        <h3>API externa sin conexión</h3>
+        <p>Inicia el servicio Node o revisa la variable EXTERNAL_API_URL.</p>
+      </div>
+      <p class="muted" style="margin-top: 20px;">El catálogo es demostrativo y no reemplaza la evaluación de un profesional veterinario.</p>
+    </section>
+  </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

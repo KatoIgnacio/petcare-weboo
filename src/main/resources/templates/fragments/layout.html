@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<body>
+<header class="site-header" th:fragment="header">
+  <nav class="nav-shell" aria-label="Navegación principal">
+    <a class="brand" th:href="@{/}" aria-label="Ir al inicio de PetCare">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>PetCare</span>
+    </a>
+    <ul class="nav-links">
+      <li><a th:href="@{/}" th:classappend="${seccion == 'inicio'} ? 'activo' : ''">Inicio</a></li>
+      <li><a th:href="@{/clientes}" th:classappend="${seccion == 'clientes'} ? 'activo' : ''">Clientes y mascotas</a></li>
+      <li><a th:href="@{/reservas}" th:classappend="${seccion == 'reservas'} ? 'activo' : ''">Reservas</a></li>
+      <li><a th:href="@{/veterinarios}" th:classappend="${seccion == 'veterinarios'} ? 'activo' : ''">Veterinarios</a></li>
+      <li><a th:href="@{/integraciones}" th:classappend="${seccion == 'integraciones'} ? 'activo' : ''">Servicios externos</a></li>
+    </ul>
+  </nav>
+</header>
+
+<div th:fragment="flash">
+  <div class="alert alert-success" th:if="${mensaje}" th:text="${mensaje}"></div>
+  <div class="alert alert-error" th:if="${error}" th:text="${error}"></div>
+  <div class="alert alert-info" th:if="${notificacion}" th:text="${notificacion}"></div>
+</div>
+
+<footer class="site-footer" th:fragment="footer">
+  <p>PetCare · Kato Bello y Jaime Palavecino · Programación Web Orientada a Objetos</p>
+</footer>
+</body>
+</html>

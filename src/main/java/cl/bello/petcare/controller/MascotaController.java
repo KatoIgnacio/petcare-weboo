@@ -44,6 +44,16 @@ public class MascotaController {
 		return mascotaService.obtener(id);
 	}
 
+	@GetMapping("/mascotas")
+	public List<MascotaResponse> listar() {
+		return mascotaService.listar();
+	}
+
+	@GetMapping("/mascotas/{id}/historial")
+	public List<cl.bello.petcare.dto.AtencionResponse> historial(@PathVariable Long id) {
+		return mascotaService.historial(id);
+	}
+
 	@PutMapping("/mascotas/{id}")
 	public MascotaResponse actualizar(
 			@PathVariable Long id,

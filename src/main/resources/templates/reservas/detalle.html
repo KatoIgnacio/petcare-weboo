@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${'Reserva ' + reserva.id + ' | PetCare'}">Reserva | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Reserva <span th:text="${'#' + reserva.id}">#1</span></p>
+      <h1 th:text="${reserva.mascotaNombre}">Paciente</h1>
+      <p>Atención asignada a <span th:text="${reserva.veterinarioNombre}">Veterinario</span>.</p>
+    </div>
+    <span class="status" th:classappend="'status-' + ${reserva.estado}" th:text="${reserva.estado}">Estado</span>
+  </div>
+
+  <section class="detail-card">
+    <dl class="detail-grid">
+      <div class="detail-item">
+        <dt>Paciente</dt>
+        <dd><a class="table-link" th:href="@{/mascotas/{id}(id=${reserva.mascotaId})}" th:text="${reserva.mascotaNombre}">Paciente</a></dd>
+      </div>
+      <div class="detail-item">
+        <dt>Veterinario</dt>
+        <dd th:text="${reserva.veterinarioNombre}">Veterinario</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Fecha y hora</dt>
+        <dd th:text="${#temporals.format(reserva.fechaHora, 'dd-MM-yyyy HH:mm')}">Fecha</dd>
+      </div>
+    </dl>
+
+    <div class="form-actions" th:if="${reserva.estado.name() == 'PENDIENTE' or reserva.estado.name() == 'CONFIRMADA'}">
+      <a class="button button-secondary" th:href="@{/reservas/{id}/editar(id=${reserva.id})}">Editar horario</a>
+
+      <form method="post" th:if="${reserva.estado.name() == 'PENDIENTE'}" th:action="@{/reservas/{id}/estado(id=${reserva.id})}">
+        <input type="hidden" name="estado" value="CONFIRMADA">
+        <button class="button button-primary" type="submit">Confirmar reserva</button>
+      </form>
+
+      <a class="button button-sky" th:if="${reserva.estado.name() == 'CONFIRMADA'}"
+         th:href="@{/reservas/{id}/atencion/nueva(id=${reserva.id})}">Registrar atención</a>
+
+      <form method="post" th:action="@{/reservas/{id}/estado(id=${reserva.id})}"
+            onsubmit="return confirm('¿Desea cancelar esta reserva?');">
+        <input type="hidden" name="estado" value="CANCELADA">
+        <button class="button button-danger" type="submit">Cancelar reserva</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel" th:if="${reserva.atencion != null}">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Registro clínico</p>
+        <h2>Atención realizada</h2>
+      </div>
+    </div>
+    <article class="history-item">
+      <h3 th:text="${#temporals.format(reserva.atencion.fecha, 'dd-MM-yyyy HH:mm')}">Fecha</h3>
+      <p><strong>Diagnóstico:</strong> <span th:text="${reserva.atencion.diagnostico}">Diagnóstico</span></p>
+      <p><strong>Tratamiento:</strong> <span th:text="${reserva.atencion.tratamiento}">Tratamiento</span></p>
+      <p th:if="${reserva.atencion.observaciones}"><strong>Observaciones:</strong> <span th:text="${reserva.atencion.observaciones}">Observaciones</span></p>
+      <ul class="tag-list">
+        <li th:each="medicamento : ${reserva.atencion.medicamentos}" th:text="${medicamento}">Medicamento</li>
+      </ul>
+    </article>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

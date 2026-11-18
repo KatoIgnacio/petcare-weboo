@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veterinarios | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Equipo clínico</p>
+      <h1>Veterinarios</h1>
+      <p>Profesionales disponibles para asignar a las reservas de atención.</p>
+    </div>
+  </div>
+
+  <div class="integration-grid">
+    <section class="panel">
+      <div class="cards-grid" th:if="${!#lists.isEmpty(veterinarios)}">
+        <article class="info-card" th:each="veterinario : ${veterinarios}">
+          <h3 th:text="${veterinario.nombre}">Veterinario</h3>
+          <p th:text="${veterinario.especialidad}">Especialidad</p>
+          <p th:text="${veterinario.email}">Correo</p>
+        </article>
+      </div>
+      <div class="empty-state" th:if="${#lists.isEmpty(veterinarios)}">
+        <h3>No hay veterinarios activos</h3>
+        <p>Registra un profesional para comenzar a crear reservas.</p>
+      </div>
+    </section>
+
+    <section class="form-card">
+      <h2>Registrar profesional</h2>
+      <form method="post" th:action="@{/veterinarios}">
+        <div class="form-grid" style="grid-template-columns: 1fr; margin-top: 18px;">
+          <div class="field">
+            <label for="nombre">Nombre completo</label>
+            <input id="nombre" name="nombre" type="text" maxlength="120" required>
+          </div>
+          <div class="field">
+            <label for="especialidad">Especialidad</label>
+            <input id="especialidad" name="especialidad" type="text" maxlength="120" required>
+          </div>
+          <div class="field">
+            <label for="email">Correo electrónico</label>
+            <input id="email" name="email" type="email" maxlength="160" required>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="button button-primary" type="submit">Registrar veterinario</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${cliente.nombre + ' | PetCare'}">Cliente | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Ficha del tutor</p>
+      <h1 th:text="${cliente.nombre}">Nombre</h1>
+      <p>Información de contacto y pacientes asociados.</p>
+    </div>
+    <div class="action-row">
+      <a class="button button-secondary" th:href="@{/clientes/{id}/editar(id=${cliente.id})}">Editar datos</a>
+      <a class="button button-primary" th:href="@{/clientes/{id}/mascotas/nueva(id=${cliente.id})}">Agregar mascota</a>
+    </div>
+  </div>
+
+  <section class="detail-card">
+    <dl class="detail-grid">
+      <div class="detail-item">
+        <dt>Correo</dt>
+        <dd th:text="${cliente.email}">Correo</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Teléfono</dt>
+        <dd th:text="${cliente.telefono}">Teléfono</dd>
+      </div>
+      <div class="detail-item">
+        <dt>Estado</dt>
+        <dd>Activo</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Pacientes asociados</p>
+        <h2>Mascotas</h2>
+      </div>
+    </div>
+    <div class="cards-grid" th:if="${!#lists.isEmpty(mascotas)}">
+      <article class="info-card" th:each="mascota : ${mascotas}">
+        <h3 th:text="${mascota.nombre}">Mascota</h3>
+        <p><strong>Especie:</strong> <span th:text="${mascota.especie}">Especie</span></p>
+        <p><strong>Raza:</strong> <span th:text="${mascota.raza}">Raza</span></p>
+        <p><strong>Peso:</strong> <span th:text="${mascota.peso + ' kg'}">Peso</span></p>
+        <div class="form-actions">
+          <a class="button button-sky button-small" th:href="@{/mascotas/{id}(id=${mascota.id})}">Ver ficha clínica</a>
+        </div>
+      </article>
+    </div>
+    <div class="empty-state" th:if="${#lists.isEmpty(mascotas)}">
+      <h3>Este cliente aún no tiene mascotas</h3>
+      <p>Agrega una mascota para habilitar sus reservas e historial médico.</p>
+    </div>
+  </section>
+
+  <section class="detail-card danger-zone">
+    <h2>Desactivar cliente</h2>
+    <p class="muted">La desactivación es lógica: el historial se conserva y sus mascotas dejan de estar disponibles.</p>
+    <form method="post" th:action="@{/clientes/{id}/eliminar(id=${cliente.id})}"
+          onsubmit="return confirm('¿Desea desactivar este cliente y sus mascotas?');">
+      <button class="button button-danger button-small" type="submit">Desactivar cliente</button>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

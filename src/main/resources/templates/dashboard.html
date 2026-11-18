@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inicio | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow">Gestión veterinaria cercana</p>
+      <h1 id="hero-title">Cuidamos cada historia clínica con claridad.</h1>
+      <p class="hero-text">
+        Administra tutores, mascotas, reservas y atenciones en un solo espacio,
+        con información ordenada para acompañar mejor a cada paciente.
+      </p>
+      <div class="hero-actions">
+        <a class="button button-primary" th:href="@{/reservas/nueva}">Agendar una atención</a>
+        <a class="button button-secondary" th:href="@{/clientes/nuevo}">Registrar cliente</a>
+      </div>
+    </div>
+    <div class="pet-card">
+      <img th:src="@{/img/perro.gif}" alt="Perro sosteniendo un corazón rosado">
+      <p>Atención organizada para pacientes bien acompañados</p>
+    </div>
+  </section>
+
+  <section class="stats-grid" aria-label="Resumen del sistema">
+    <article class="stat-card">
+      <span class="stat-label">Clientes activos</span>
+      <strong class="stat-number" th:text="${totalClientes}">0</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Mascotas registradas</span>
+      <strong class="stat-number" th:text="${totalMascotas}">0</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Reservas totales</span>
+      <strong class="stat-number" th:text="${totalReservas}">0</strong>
+    </article>
+    <article class="stat-card">
+      <span class="stat-label">Reservas pendientes</span>
+      <strong class="stat-number" th:text="${reservasPendientes}">0</strong>
+    </article>
+  </section>
+
+  <section class="panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Actividad clínica</p>
+        <h2>Reservas recientes</h2>
+      </div>
+      <a class="button button-secondary button-small" th:href="@{/reservas}">Ver todas</a>
+    </div>
+    <div class="table-wrap" th:if="${!#lists.isEmpty(reservasRecientes)}">
+      <table class="data-table">
+        <thead>
+        <tr>
+          <th>Paciente</th>
+          <th>Veterinario</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="reserva : ${reservasRecientes}">
+          <td th:text="${reserva.mascotaNombre}">Paciente</td>
+          <td th:text="${reserva.veterinarioNombre}">Veterinario</td>
+          <td th:text="${#temporals.format(reserva.fechaHora, 'dd-MM-yyyy HH:mm')}">Fecha</td>
+          <td><span class="status" th:classappend="'status-' + ${reserva.estado}" th:text="${reserva.estado}">Estado</span></td>
+          <td><a class="table-link" th:href="@{/reservas/{id}(id=${reserva.id})}">Abrir</a></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="empty-state" th:if="${#lists.isEmpty(reservasRecientes)}">
+      <h3>Aún no hay reservas</h3>
+      <p>Registra una atención para comenzar a organizar la agenda.</p>
+    </div>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

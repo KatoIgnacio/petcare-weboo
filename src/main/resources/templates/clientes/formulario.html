@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${modoEdicion ? 'Editar cliente | PetCare' : 'Nuevo cliente | PetCare'}">Cliente | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Ficha del tutor</p>
+      <h1 th:text="${modoEdicion ? 'Editar cliente' : 'Registrar cliente'}">Registrar cliente</h1>
+      <p>Los datos de contacto se utilizarán para identificar al tutor y gestionar sus reservas.</p>
+    </div>
+  </div>
+
+  <section class="form-card">
+    <form method="post" th:action="${modoEdicion} ? @{/clientes/{id}(id=${cliente.id})} : @{/clientes}">
+      <div class="form-grid">
+        <div class="field field-full">
+          <label for="nombre">Nombre completo</label>
+          <input id="nombre" name="nombre" type="text" maxlength="120" required
+                 th:value="${modoEdicion ? cliente.nombre : ''}" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="email">Correo electrónico</label>
+          <input id="email" name="email" type="email" maxlength="160" required
+                 th:value="${modoEdicion ? cliente.email : ''}" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="telefono">Teléfono</label>
+          <input id="telefono" name="telefono" type="tel" maxlength="30" required
+                 th:value="${modoEdicion ? cliente.telefono : ''}" autocomplete="tel">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit" th:text="${modoEdicion ? 'Guardar cambios' : 'Registrar cliente'}">Guardar</button>
+        <a class="button button-secondary" th:href="${modoEdicion} ? @{/clientes/{id}(id=${cliente.id})} : @{/clientes}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

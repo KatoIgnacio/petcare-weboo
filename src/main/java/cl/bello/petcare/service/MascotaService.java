@@ -1,10 +1,13 @@
 package cl.bello.petcare.service;
 
+import cl.bello.petcare.dto.AtencionResponse;
 import cl.bello.petcare.dto.MascotaRequest;
 import cl.bello.petcare.dto.MascotaResponse;
+import cl.bello.petcare.entity.AtencionMedica;
 import cl.bello.petcare.entity.Cliente;
 import cl.bello.petcare.entity.Mascota;
 import cl.bello.petcare.exception.RecursoNoEncontradoException;
+import cl.bello.petcare.repository.AtencionMedicaRepository;
 import cl.bello.petcare.repository.ClienteRepository;
 import cl.bello.petcare.repository.MascotaRepository;
 import java.util.List;
@@ -16,10 +19,15 @@ public class MascotaService {
 
 	private final ClienteRepository clienteRepository;
 	private final MascotaRepository mascotaRepository;
+	private final AtencionMedicaRepository atencionRepository;
 
-	public MascotaService(ClienteRepository clienteRepository, MascotaRepository mascotaRepository) {
+	public MascotaService(
+			ClienteRepository clienteRepository,
+			MascotaRepository mascotaRepository,
+			AtencionMedicaRepository atencionRepository) {
 		this.clienteRepository = clienteRepository;
 		this.mascotaRepository = mascotaRepository;
+		this.atencionRepository = atencionRepository;
 	}
 
 	@Transactional
@@ -49,6 +57,21 @@ public class MascotaService {
 	@Transactional(readOnly = true)
 	public MascotaResponse obtener(Long id) {
 		return toResponse(buscarActiva(id));
+	}
+
+	@Transactional(readOnly = true)
+	public List<MascotaResponse> listar() {
+		return mascotaRepository.findByActivoTrueOrderByNombreAsc().stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<AtencionResponse> historial(Long id) {
+		buscarActiva(id);
+		return atencionRepository.findByReservaMascotaIdOrderByFechaDesc(id).stream()
+				.map(this::toAtencionResponse)
+				.toList();
 	}
 
 	@Transactional
@@ -83,5 +106,15 @@ public class MascotaService {
 				mascota.getPeso(),
 				mascota.isActivo());
 	}
-}
 
+	private AtencionResponse toAtencionResponse(AtencionMedica atencion) {
+		return new AtencionResponse(
+				atencion.getId(),
+				atencion.getReserva().getId(),
+				atencion.getFecha(),
+				atencion.getDiagnostico(),
+				atencion.getTratamiento(),
+				atencion.getMedicamentos(),
+				atencion.getObservaciones());
+	}
+}

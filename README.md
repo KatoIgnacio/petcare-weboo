@@ -1,6 +1,6 @@
 # PetCare
 
-Avance de desarrollo del sistema de gestión de atención veterinaria para la asignatura Programación Web Orientada a Objetos.
+Sistema de gestión de atención veterinaria desarrollado para la asignatura Programación Web Orientada a Objetos.
 
 ## Estado del avance
 
@@ -12,8 +12,10 @@ Avance de desarrollo del sistema de gestión de atención veterinaria para la as
 - Prevención de reservas duplicadas para el veterinario o la mascota.
 - Estados `PENDIENTE`, `CONFIRMADA`, `CANCELADA` y `ATENDIDA`.
 - Servicio Node independiente para medicamentos, ubicación y notificaciones.
+- Interfaz web Thymeleaf para clientes, mascotas, reservas, atenciones, veterinarios e integraciones.
+- Dashboard responsivo con la identidad visual de PetCare.
 - Pruebas automatizadas del flujo principal.
-- Flujo integrado verificado con PostgreSQL 17 y la API externa en ejecución.
+- Flujo local integrado con PostgreSQL 17 y la API externa Node.
 
 ## Puertos
 
@@ -38,7 +40,9 @@ petcare/
 |- src/main/resources/
 |  |- schema.sql
 |  |- data.sql
-|  `- application.properties
+|  |- application.properties
+|  |- templates/
+|  `- static/
 |- external-api/
 |- postman/
 `- compose.yaml
@@ -82,7 +86,11 @@ cd C:\Users\KATO\Desktop\WebOS\petcare
 
 La aplicación queda disponible en `http://localhost:8082`.
 
-## Endpoints del reporte
+La ejecución evaluada se realizará en un mismo computador. La variable
+`EXTERNAL_API_URL` permite cambiar posteriormente la ubicación de la API Node,
+pero la prueba entre dos computadores queda fuera de esta entrega.
+
+## Endpoints principales del reporte
 
 | ID | Método | URL |
 |---|---|---|
@@ -99,6 +107,33 @@ La aplicación queda disponible en `http://localhost:8082`.
 
 También se implementaron rutas auxiliares para consultar, actualizar y desactivar clientes y mascotas, crear veterinarios y consultar una reserva.
 
+### Endpoints REST completos
+
+| Recurso | Método y ruta |
+|---|---|
+| Clientes | `POST /api/clientes` |
+| Clientes | `GET /api/clientes` |
+| Clientes | `GET /api/clientes/{id}` |
+| Clientes | `PUT /api/clientes/{id}` |
+| Clientes | `DELETE /api/clientes/{id}` |
+| Mascotas | `POST /api/clientes/{clienteId}/mascotas` |
+| Mascotas | `GET /api/clientes/{clienteId}/mascotas` |
+| Mascotas | `GET /api/mascotas` |
+| Mascotas | `GET /api/mascotas/{id}` |
+| Mascotas | `GET /api/mascotas/{id}/historial` |
+| Mascotas | `PUT /api/mascotas/{id}` |
+| Mascotas | `DELETE /api/mascotas/{id}` |
+| Veterinarios | `POST /api/veterinarios` |
+| Veterinarios | `GET /api/veterinarios` |
+| Reservas | `POST /api/reservas` |
+| Reservas | `GET /api/reservas` |
+| Reservas | `GET /api/reservas/{id}` |
+| Reservas | `PUT /api/reservas/{id}` |
+| Reservas | `PATCH /api/reservas/{id}/estado` |
+| Reservas | `POST /api/reservas/{id}/atencion` |
+| Integraciones | `GET /api/integraciones/medicamentos?nombre={nombre}` |
+| Integraciones | `GET /api/integraciones/ubicacion-clinica` |
+
 ## Base de datos
 
 `schema.sql` crea las tablas y restricciones. `data.sql` agrega un veterinario demostrativo:
@@ -111,7 +146,8 @@ La eliminación de clientes y mascotas es lógica para conservar el historial.
 ### Datos de demostración ampliados
 
 El archivo `database/demo-data.sql` agrega clientes, mascotas, veterinarios,
-reservas en distintos estados, atenciones y medicamentos. Es idempotente: se
+reservas en distintos estados, incluidas reservas futuras para la demostración,
+atenciones y medicamentos. Es idempotente: se
 puede ejecutar nuevamente sin duplicar el conjunto de demostración.
 
 ```powershell
@@ -132,12 +168,15 @@ Las pruebas verifican:
 - Creación HTTP de cliente, mascota, veterinario y reserva.
 - Rechazo HTTP de una reserva duplicada.
 - Confirmación de reserva y registro de atención médica.
+- Renderización de las páginas principales y disponibilidad del GIF del dashboard.
 
-Resultado actual: `3` pruebas automatizadas aprobadas y empaquetado `bootJar` exitoso.
+Resultado actual: `4` pruebas automatizadas aprobadas y empaquetado `bootJar` exitoso.
 
 ## Postman
 
-Importar los dos archivos ubicados en `postman/`, seleccionar el entorno `PetCare Local` y ejecutar la colección completa en orden.
+Importar los dos archivos ubicados en `postman/`, seleccionar el entorno
+`PetCare Local` y ejecutar la colección completa en orden. La colección cubre
+los 22 endpoints Spring y los 3 endpoints directos de la API Node.
 
 ## Nota sobre medicamentos
 

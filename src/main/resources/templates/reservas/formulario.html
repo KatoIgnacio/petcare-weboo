@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${modoEdicion ? 'Editar reserva | PetCare' : 'Nueva reserva | PetCare'}">Reserva | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Agenda clínica</p>
+      <h1 th:text="${modoEdicion ? 'Editar reserva' : 'Nueva reserva'}">Nueva reserva</h1>
+      <p>El sistema impide que un veterinario o una mascota tengan dos reservas activas en el mismo horario.</p>
+    </div>
+  </div>
+
+  <div class="alert alert-info" th:if="${#lists.isEmpty(mascotas) or #lists.isEmpty(veterinarios)}">
+    Para crear una reserva se necesita al menos una mascota y un veterinario activos.
+  </div>
+
+  <section class="form-card">
+    <form method="post" th:action="${modoEdicion} ? @{/reservas/{id}(id=${reserva.id})} : @{/reservas}">
+      <div class="form-grid">
+        <div class="field" th:if="${!modoEdicion}">
+          <label for="mascotaId">Mascota</label>
+          <select id="mascotaId" name="mascotaId" required>
+            <option value="">Seleccione una mascota</option>
+            <option th:each="mascota : ${mascotas}"
+                    th:value="${mascota.id}"
+                    th:selected="${selectedMascotaId != null and selectedMascotaId == mascota.id}"
+                    th:text="${mascota.nombre + ' · ' + mascota.especie}">Mascota</option>
+          </select>
+        </div>
+        <div class="field" th:if="${modoEdicion}">
+          <label>Paciente</label>
+          <input type="text" th:value="${reserva.mascotaNombre}" disabled>
+        </div>
+        <div class="field">
+          <label for="veterinarioId">Veterinario</label>
+          <select id="veterinarioId" name="veterinarioId" required>
+            <option value="">Seleccione un profesional</option>
+            <option th:each="veterinario : ${veterinarios}"
+                    th:value="${veterinario.id}"
+                    th:selected="${modoEdicion and reserva.veterinarioId == veterinario.id}"
+                    th:text="${veterinario.nombre + ' · ' + veterinario.especialidad}">Veterinario</option>
+          </select>
+        </div>
+        <div class="field field-full">
+          <label for="fechaHora">Fecha y hora</label>
+          <input id="fechaHora" name="fechaHora" type="datetime-local" required
+                 th:min="${#temporals.format(fechaMinima, 'yyyy-MM-dd''T''HH:mm')}"
+                 th:value="${modoEdicion ? #temporals.format(reserva.fechaHora, 'yyyy-MM-dd''T''HH:mm') : ''}">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit"
+                th:disabled="${#lists.isEmpty(mascotas) or #lists.isEmpty(veterinarios)}"
+                th:text="${modoEdicion ? 'Guardar cambios' : 'Crear reserva'}">Guardar</button>
+        <a class="button button-secondary" th:href="${modoEdicion} ? @{/reservas/{id}(id=${reserva.id})} : @{/reservas}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

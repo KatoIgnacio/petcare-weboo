@@ -9,6 +9,7 @@ import cl.bello.petcare.dto.ReservaUpdateRequest;
 import cl.bello.petcare.service.ReservaService;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -33,6 +34,11 @@ public class ReservaController {
 	public ResponseEntity<ReservaResponse> crear(@Valid @RequestBody ReservaRequest request) {
 		ReservaResponse response = reservaService.crear(request);
 		return ResponseEntity.created(URI.create("/api/reservas/" + response.id())).body(response);
+	}
+
+	@GetMapping
+	public List<ReservaResponse> listar() {
+		return reservaService.listar();
 	}
 
 	@GetMapping("/{id}")

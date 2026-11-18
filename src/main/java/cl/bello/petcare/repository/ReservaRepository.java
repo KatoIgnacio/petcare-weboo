@@ -4,6 +4,7 @@ import cl.bello.petcare.entity.EstadoReserva;
 import cl.bello.petcare.entity.Reserva;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -13,6 +14,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReservaRepository extends JpaRepository<Reserva, Long> {
+
+	@EntityGraph(attributePaths = {"mascota", "mascota.cliente", "veterinario"})
+	List<Reserva> findAllByOrderByFechaHoraDesc();
 
 	boolean existsByVeterinarioIdAndFechaHoraAndEstadoIn(
 			Long veterinarioId,

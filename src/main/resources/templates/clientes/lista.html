@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Tutores y pacientes</p>
+      <h1>Clientes</h1>
+      <p>Consulta los datos de contacto y las mascotas asociadas a cada tutor.</p>
+    </div>
+    <a class="button button-primary" th:href="@{/clientes/nuevo}">Registrar cliente</a>
+  </div>
+
+  <section class="panel">
+    <div class="table-wrap" th:if="${!#lists.isEmpty(clientes)}">
+      <table class="data-table">
+        <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Teléfono</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="cliente : ${clientes}">
+          <td><a class="table-link" th:href="@{/clientes/{id}(id=${cliente.id})}" th:text="${cliente.nombre}">Nombre</a></td>
+          <td th:text="${cliente.email}">Correo</td>
+          <td th:text="${cliente.telefono}">Teléfono</td>
+          <td><a class="button button-secondary button-small" th:href="@{/clientes/{id}(id=${cliente.id})}">Ver ficha</a></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="empty-state" th:if="${#lists.isEmpty(clientes)}">
+      <h3>No hay clientes activos</h3>
+      <p>Registra al primer tutor para luego asociar sus mascotas.</p>
+    </div>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

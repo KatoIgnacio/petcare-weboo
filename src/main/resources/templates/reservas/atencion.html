@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registrar atención | PetCare</title>
+  <link rel="stylesheet" th:href="@{/css/petcare.css}">
+</head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="page-shell">
+  <div th:replace="~{fragments/layout :: flash}"></div>
+  <div class="page-header">
+    <div>
+      <p class="eyebrow">Historial médico</p>
+      <h1>Registrar atención</h1>
+      <p>Paciente: <strong th:text="${reserva.mascotaNombre}">Mascota</strong> · Veterinario: <strong th:text="${reserva.veterinarioNombre}">Veterinario</strong></p>
+    </div>
+  </div>
+
+  <div class="alert alert-error" th:if="${reserva.estado.name() != 'CONFIRMADA'}">
+    Solo una reserva confirmada puede registrar una atención médica.
+  </div>
+
+  <section class="form-card">
+    <form method="post" th:action="@{/reservas/{id}/atencion(id=${reserva.id})}">
+      <div class="form-grid">
+        <div class="field field-full">
+          <label for="diagnostico">Diagnóstico</label>
+          <textarea id="diagnostico" name="diagnostico" maxlength="1000" required></textarea>
+        </div>
+        <div class="field field-full">
+          <label for="tratamiento">Tratamiento</label>
+          <textarea id="tratamiento" name="tratamiento" maxlength="1000" required></textarea>
+        </div>
+        <div class="field field-full">
+          <label for="medicamentos">Medicamentos</label>
+          <input id="medicamentos" name="medicamentos" type="text" maxlength="500" required
+                 placeholder="Separar cada medicamento con una coma">
+          <span class="field-help">La búsqueda del catálogo externo está disponible en Servicios externos.</span>
+        </div>
+        <div class="field field-full">
+          <label for="observaciones">Observaciones</label>
+          <textarea id="observaciones" name="observaciones" maxlength="1500"></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit" th:disabled="${reserva.estado.name() != 'CONFIRMADA'}">Guardar atención</button>
+        <a class="button button-secondary" th:href="@{/reservas/{id}(id=${reserva.id})}">Cancelar</a>
+        <a class="button button-sky" th:href="@{/integraciones}">Consultar medicamentos</a>
+      </div>
+    </form>
+  </section>
+</main>
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
