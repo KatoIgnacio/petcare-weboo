@@ -75,6 +75,13 @@ public class MascotaService {
 		return toResponse(buscarActiva(id));
 	}
 
+	@Transactional(readOnly = true)
+	public List<MascotaResponse> listar() {
+		return mascotaRepository.findByActivoTrueOrderByNombreAsc().stream()
+				.map(this::toResponse)
+				.toList();
+	}
+
 	@Transactional
 	public MascotaResponse actualizar(Long id, MascotaRequest request) {
 		Mascota mascota = buscarActiva(id);

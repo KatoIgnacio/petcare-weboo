@@ -58,7 +58,10 @@ FROM (VALUES
     ('pedro.soto@demo.petcare.cl', 'Kiara', 'camila.fuentes@demo.petcare.cl', TIMESTAMP '2026-11-08 16:00:00', 'CONFIRMADA'),
     ('daniela.munoz@demo.petcare.cl', 'Copito', 'valentina.perez@demo.petcare.cl', TIMESTAMP '2026-11-09 09:00:00', 'PENDIENTE'),
     ('carlos.mendez@demo.petcare.cl', 'Max', 'diego.morales@demo.petcare.cl', TIMESTAMP '2026-11-10 14:00:00', 'CONFIRMADA'),
-    ('fernanda.silva@demo.petcare.cl', 'Rocky', 'paula.rojas@petcare.cl', TIMESTAMP '2026-11-11 17:00:00', 'PENDIENTE')
+    ('fernanda.silva@demo.petcare.cl', 'Rocky', 'paula.rojas@petcare.cl', TIMESTAMP '2026-11-11 17:00:00', 'PENDIENTE'),
+    ('carlos.mendez@demo.petcare.cl', 'Max', 'paula.rojas@petcare.cl', TIMESTAMP '2026-11-19 10:00:00', 'PENDIENTE'),
+    ('maria.gonzalez@demo.petcare.cl', 'Nala', 'valentina.perez@demo.petcare.cl', TIMESTAMP '2026-11-20 12:00:00', 'CONFIRMADA'),
+    ('pedro.soto@demo.petcare.cl', 'Toby', 'jose.contreras@demo.petcare.cl', TIMESTAMP '2026-11-21 09:00:00', 'PENDIENTE')
 ) AS datos(email_cliente, mascota, email_veterinario, fecha_hora, estado)
 JOIN clientes c ON c.email = datos.email_cliente
 JOIN mascotas m ON m.cliente_id = c.id AND m.nombre = datos.mascota

@@ -15,6 +15,8 @@ public interface MascotaRepository extends JpaRepository<Mascota, Long> {
 
 	List<Mascota> findByClienteIdAndActivoTrueOrderByNombreAsc(Long clienteId);
 
+	List<Mascota> findByActivoTrueOrderByNombreAsc();
+
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("""
 			select m from Mascota m

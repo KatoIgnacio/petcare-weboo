@@ -45,6 +45,11 @@ public class MascotaController {
 		return mascotaService.obtener(id);
 	}
 
+	@GetMapping("/mascotas")
+	public List<MascotaResponse> listar() {
+		return mascotaService.listar();
+	}
+
 	@GetMapping("/mascotas/{id}/historial")
 	public List<AtencionResponse> historial(@PathVariable Long id) {
 		return mascotaService.historial(id);

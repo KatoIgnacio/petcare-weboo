@@ -156,12 +156,15 @@ Las rutas **E01–E07** pertenecen a Spring (puerto `8082`); **E08–E10** perte
 | `GET` | `/api/configuracion` | Devuelve `externalApiUrl`. |
 | `GET` | `/api/clientes` | Lista clientes activos. |
 | `GET`, `PUT`, `DELETE` | `/api/clientes/{id}` | Consulta, edición y baja lógica. |
+| `GET` | `/api/mascotas` | Lista las mascotas activas. |
 | `GET`, `PUT`, `DELETE` | `/api/mascotas/{id}` | Consulta, edición y baja lógica. |
 | `GET` | `/api/mascotas/{id}/historial` | Lista atenciones aunque la mascota esté dada de baja. |
 | `GET`, `POST` | `/api/veterinarios` | Lista o registra profesionales. |
 | `GET` | `/api/veterinarios/{id}/disponibilidad?fecha=YYYY-MM-DD` | Lista ordenada de horas libres en formato `HH:mm`, o `[]` si no quedan bloques futuros. |
 | `GET` | `/api/reservas` | Agenda. Admite `fecha=YYYY-MM-DD` y `veterinarioId` como filtros combinables. |
 | `GET` | `/api/reservas/{id}` | Detalle, atención y resultado del último aviso. |
+| `GET` | `/api/integraciones/medicamentos?nombre=...` | Consulta de compatibilidad a Node desde Spring. |
+| `GET` | `/api/integraciones/ubicacion-clinica` | Consulta de compatibilidad a Node desde Spring. |
 
 `fechaHora` se envía en ISO local sin zona, por ejemplo `2026-11-27T10:30:00`; debe ser futura al crear o reprogramar. Las bajas devuelven `204`. Spring usa `ApiError` para informar el estado, mensaje, ruta y detalles del error. Los casos más comunes son `400` por datos inválidos, `404` por recurso inexistente y `409` por conflicto.
 
@@ -196,7 +199,7 @@ El detalle de la reserva consulta el resultado persistido. `ACEPTADA:<idNotifica
 | Node | `npm.cmd test` en el [repositorio externo](https://github.com/JaimePalavecino/petcare-external-api#pruebas). |
 | Integración | Importa la [colección](postman/PetCare.postman_collection.json) y el [entorno](postman/PetCare_Local.postman_environment.json) en Postman. Ejecuta todas las solicitudes en orden, desde **Configuración e inicio de una corrida nueva**. |
 
-En Postman, `baseUrl` apunta a Spring y `externalUrl` a Node. Si ejecutas la colección desde el equipo 1, cambia `externalUrl` a la misma dirección del equipo 2 que usa Spring. Usa una base separada y Mailpit. Cada corrida genera datos ficticios y fechas futuras en la hora de Santiago. Mailpit debe capturar una confirmación, una cancelación y un aviso directo de E10.
+En Postman, `baseUrl` apunta a Spring y `externalUrl` a Node. Si ejecutas la colección desde el equipo 1, cambia `externalUrl` a la misma dirección del equipo 2 que usa Spring. Usa una base separada y Mailpit. Cada corrida genera datos ficticios y fechas futuras en la hora de Santiago. Verifica en Mailpit cuatro mensajes por corrida: confirmación, reprogramación de la reserva confirmada, cancelación y aviso directo de E10. Los tres avisos de reserva deben llegar al destinatario de prueba que creó la colección; el aviso directo usa un destinatario distinto. El correo de reprogramación muestra las horas anterior y nueva, y repetir E05 sin cambios no genera otro mensaje.
 
 <details>
 <summary>Ejecutar la colección con Newman</summary>

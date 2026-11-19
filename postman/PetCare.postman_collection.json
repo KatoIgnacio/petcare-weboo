@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "08fd0499-28b9-472e-81e8-79d4bf67186a",
     "name": "PetCare - Flujo de demostración",
-    "description": "Verificación de E01–E10 y disponibilidad. Ejecutar la colección completa y en orden, contra una base separada y Node con Mailpit. El inicio genera datos nuevos y bloques futuros de la clínica en America/Santiago. La aceptación SMTP se comprueba aparte en Mailpit.",
+    "description": "Verificación de E01–E10, catálogo, disponibilidad y aviso de reprogramación. Ejecutar la colección completa y en orden, contra una base separada y Node con Mailpit. El inicio genera datos nuevos y bloques futuros de la clínica en America/Santiago. La aceptación SMTP se comprueba aparte en Mailpit.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -40,7 +40,7 @@
                   "};",
                   "const ids = ['clienteId', 'mascotaId', 'veterinarioId', 'reservaId', 'reservaCanceladaId', 'atencionId',",
                   "  'eventoConfirmacion', 'eventoCancelacion', 'acuseConfirmacion', 'acuseCancelacion', 'idNotificacion',",
-                  "  'limiteConfirmacion', 'limiteCancelacion'];",
+                  "  'limiteConfirmacion', 'limiteCancelacion', 'eventoCambioConfirmada', 'acuseCambioConfirmada', 'limiteCambioConfirmada'];",
                   "ids.forEach(id => pm.collectionVariables.unset(id));",
                   "// Los registros son nuevos en cada corrida; las horas se eligen de bloques válidos.",
                   "const diaReserva = fecha(now + 4 * 86400000).slice(0, 10);",
@@ -50,6 +50,7 @@
                   "  correoDirecto: 'etapa7.directo.' + run + '@example.invalid',",
                   "  horaLocalInicio: fecha(now), fechaReserva: diaReserva + 'T' + horaReserva + ':00',",
                   "  fechaReprogramada: diaReserva + 'T18:30:00',",
+                  "  fechaCambioConfirmada: diaReserva + 'T17:30:00',",
                   "  fechaCancelacion: fecha(now + 5 * 86400000).slice(0, 10) + 'T10:30:00',",
                   "  fechaPasada: fecha(now - 4 * 86400000).slice(0, 10) + 'T10:00:00'",
                   "};",
@@ -266,6 +267,30 @@
           ]
         },
         {
+          "name": "Consultar cliente editado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Datos actualizados del cliente\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.id).to.eql(Number(pm.collectionVariables.get('clienteId')));",
+                  "  pm.expect(b.telefono).to.eql('+56987654321');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Listar clientes",
           "request": {
             "method": "GET",
@@ -414,6 +439,100 @@
                   "    pm.expect(b[0].clienteId).to.eql(Number(v('clienteId')));",
                   "  });",
                   "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Editar mascota",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Nube Editada {{sufijo}}\",\n  \"especie\": \"Canina\",\n  \"raza\": \"Mestiza\",\n  \"fechaNacimiento\": \"2020-06-15\",\n  \"peso\": 11.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Conserva la identidad y guarda los cambios\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.id).to.eql(Number(pm.collectionVariables.get('mascotaId')));",
+                  "  pm.expect(b.clienteId).to.eql(Number(pm.collectionVariables.get('clienteId')));",
+                  "  pm.expect(b.nombre).to.eql(pm.variables.replaceIn('Etapa7 Nube Editada {{sufijo}}'));",
+                  "  pm.expect(b.peso).to.eql(11.5);",
+                  "  pm.expect(b.activo).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar mascota editada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Devuelve los cambios de la mascota\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.id).to.eql(Number(pm.collectionVariables.get('mascotaId')));",
+                  "  pm.expect(b.clienteId).to.eql(Number(pm.collectionVariables.get('clienteId')));",
+                  "  pm.expect(b.nombre).to.eql(pm.variables.replaceIn('Etapa7 Nube Editada {{sufijo}}'));",
+                  "  pm.expect(b.peso).to.eql(11.5);",
+                  "  pm.expect(b.activo).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar todas las mascotas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Incluye la mascota activa editada\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json();",
+                  "  pm.expect(items).to.be.an(\"array\");",
+                  "  const mascota = items.find(b => b.id === Number(pm.collectionVariables.get('mascotaId')));",
+                  "  pm.expect(mascota?.nombre).to.eql(pm.variables.replaceIn('Etapa7 Nube Editada {{sufijo}}'));",
+                  "  pm.expect(mascota?.activo).to.eql(true);",
+                  "});"
                 ]
               }
             }
@@ -920,6 +1039,30 @@
               }
             }
           ]
+        },
+        {
+          "name": "Consultar agenda general",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"La agenda incluye la reserva sin aplicar un filtro\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json();",
+                  "  pm.expect(items).to.be.an(\"array\");",
+                  "  pm.expect(items.some(b => b.id === Number(pm.collectionVariables.get('reservaId')) && b.estado === \"PENDIENTE\")).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1112,6 +1255,154 @@
           ]
         },
         {
+          "name": "E05 · Reprogramar reserva confirmada",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaCambioConfirmada}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Conserva la reserva y guarda la nueva hora\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCambioConfirmada'));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "  pm.test('E05 encola un aviso nuevo', () => {",
+                  "    pm.expect(b.resultadoNotificacion).to.match(/^PENDIENTE:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    pm.expect(b.resultadoNotificacion).not.to.eql('PENDIENTE:' + v('eventoConfirmacion'));",
+                  "  });",
+                  "  save('eventoCambioConfirmada', b.resultadoNotificacion.split(':')[1]);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E05 · Repetir los mismos datos no encola otro aviso",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaCambioConfirmada}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Conserva la reserva y guarda la nueva hora\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCambioConfirmada'));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "  });",
+                  "  pm.test('Sin cambios no se genera otro aviso', () => {",
+                  "    pm.expect(b.resultadoNotificacion).to.eql('NO_APLICA');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar aceptación del aviso de reprogramación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Estado de la reserva guardado\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "  });",
+                  "  const resultado = String(b.resultadoNotificacion);",
+                  "  if (/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(resultado)) {",
+                  "    pm.test(\"SMTP local aceptó el aviso y se guardó el recibo\", () => {",
+                  "      pm.expect(resultado).to.match(/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    });",
+                  "    pm.test('El recibo de reprogramación es distinto del de confirmación', () => {",
+                  "      pm.expect(resultado).not.to.eql('ACEPTADA:' + v('acuseConfirmacion'));",
+                  "    });",
+                  "    save('acuseCambioConfirmada', resultado.split(':')[1]);",
+                  "  } else {",
+                  "    const enCurso = /^(PENDIENTE|EN_PROCESO|PENDIENTE_REINTENTO):/.test(resultado);",
+                  "    const eventoCorrecto = resultado.split(':')[1] === v('eventoCambioConfirmada');",
+                  "    const limite = Number(v('limiteCambioConfirmada')) || Date.now() + 30000;",
+                  "    pm.test('El aviso conserva su evento y sigue en curso dentro de 30 s', () => {",
+                  "      pm.expect(enCurso && eventoCorrecto && Date.now() < limite, resultado).to.eql(true);",
+                  "    });",
+                  "    if (enCurso && eventoCorrecto && Date.now() < limite) {",
+                  "      save('limiteCambioConfirmada', limite);",
+                  "      pm.execution.setNextRequest(pm.info.requestId);",
+                  "      setTimeout(() => {}, 750);",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "E06 · Rechazar retroceso a pendiente",
           "request": {
             "method": "PATCH",
@@ -1273,10 +1564,10 @@
                   "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
                   "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
                   "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
-                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaReprogramada'));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCambioConfirmada'));",
                   "    pm.expect(b.estado).to.eql(\"ATENDIDA\");",
                   "    pm.expect(b.atencion.id).to.eql(Number(v('atencionId')));",
-                  "    pm.expect(b.resultadoNotificacion).to.eql('ACEPTADA:' + v('acuseConfirmacion'));",
+                  "    pm.expect(b.resultadoNotificacion).to.eql('ACEPTADA:' + v('acuseCambioConfirmada'));",
                   "  });",
                   "}"
                 ]
@@ -1598,6 +1889,37 @@
       "description": "Consulta E08 y E09 directamente a Node y utiliza SMTP de captura para E10.",
       "item": [
         {
+          "name": "Catálogo completo de medicamentos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalUrl}}/api/medicamentos/catalogo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 con catálogo ordenado y los cinco campos', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json();",
+                  "  pm.expect(items).to.be.an('array').that.is.not.empty;",
+                  "  const campos = ['nombre', 'principioActivo', 'presentacion', 'advertencias', 'fuente'];",
+                  "  for (const item of items) {",
+                  "    pm.expect(item).to.have.all.keys(campos);",
+                  "    campos.forEach(campo => pm.expect(item[campo]).to.be.a('string').and.match(/\\S/));",
+                  "  }",
+                  "  const nombres = items.map(item => item.nombre);",
+                  "  pm.expect(nombres).to.eql([...nombres].sort((a, b) => a.localeCompare(b, 'es')));",
+                  "  pm.expect(nombres).to.include.members(['Amoxicilina', 'Carprofeno', 'Meloxicam']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "E08 · Búsqueda parcial sin distinguir mayúsculas",
           "request": {
             "method": "GET",
@@ -1718,6 +2040,54 @@
                   "    pm.expect(mapa.slice(1).map(Number)).to.eql([b.latitud, b.longitud, b.latitud, b.longitud]);",
                   "  });",
                   "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar medicamento mediante Spring",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/integraciones/medicamentos?nombre=amox"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"La ruta compatible encuentra Amoxicilina\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json();",
+                  "  pm.expect(items).to.be.an(\"array\").that.is.not.empty;",
+                  "  pm.expect(items.some(item => item.nombre === \"Amoxicilina\" && item.principioActivo)).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar ubicación mediante Spring",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/integraciones/ubicacion-clinica"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"La ruta compatible devuelve los datos de la clínica\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.all.keys(\"nombre\",\"direccion\",\"latitud\",\"longitud\",\"urlMapa\");",
+                  "  pm.expect(b.urlMapa).to.match(/^https?:\\/\\//);",
+                  "});"
                 ]
               }
             }
@@ -1902,6 +2272,119 @@
                   "    pm.expect(b.mensaje).to.be.a('string').and.match(/\\S/);",
                   "  });",
                   "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 · Bajas lógicas",
+      "item": [
+        {
+          "name": "Desactivar mascota",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Da de baja la mascota\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar mascota desactivada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"La ficha activa deja de estar disponible\", () => {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar historial después de la baja",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}/historial"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"El historial conserva la atención\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const atenciones = pm.response.json();",
+                  "  pm.expect(atenciones).to.be.an(\"array\");",
+                  "  pm.expect(atenciones.some(a => a.id === Number(pm.collectionVariables.get('atencionId')))).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desactivar cliente",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Da de baja al cliente\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar cliente desactivado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"La ficha activa del cliente deja de estar disponible\", () => {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
                 ]
               }
             }
