@@ -69,9 +69,16 @@ CREATE TABLE IF NOT EXISTS notificaciones_pendientes (
     id_externo VARCHAR(100),
     ultimo_error VARCHAR(200),
     creada_en TIMESTAMP WITH TIME ZONE NOT NULL,
-    actualizada_en TIMESTAMP WITH TIME ZONE NOT NULL,
-    CONSTRAINT uk_notificacion_reserva_estado UNIQUE (reserva_id, estado_reserva)
+    actualizada_en TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+-- Las notificaciones previas conservan su tipo de transición y sus recibos.
+ALTER TABLE notificaciones_pendientes ADD COLUMN IF NOT EXISTS es_reprogramacion BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_notificacion_transicion
+    ON notificaciones_pendientes(reserva_id, estado_reserva) WHERE NOT es_reprogramacion;
+
+ALTER TABLE notificaciones_pendientes DROP CONSTRAINT IF EXISTS uk_notificacion_reserva_estado;
 
 CREATE INDEX IF NOT EXISTS idx_notificaciones_estado_fecha
     ON notificaciones_pendientes(estado, proximo_intento);

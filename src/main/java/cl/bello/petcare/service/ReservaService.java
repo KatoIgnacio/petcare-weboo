@@ -37,23 +37,26 @@ public class ReservaService {
 	private final ReservaRepository reservaRepository;
 	private final AtencionMedicaRepository atencionRepository;
 	private final NotificacionService notificacionService;
+	private final HorarioClinica horario;
 
 	public ReservaService(
 			MascotaRepository mascotaRepository,
 			VeterinarioRepository veterinarioRepository,
 			ReservaRepository reservaRepository,
 			AtencionMedicaRepository atencionRepository,
-			NotificacionService notificacionService) {
+			NotificacionService notificacionService,
+			HorarioClinica horario) {
 		this.mascotaRepository = mascotaRepository;
 		this.veterinarioRepository = veterinarioRepository;
 		this.reservaRepository = reservaRepository;
 		this.atencionRepository = atencionRepository;
 		this.notificacionService = notificacionService;
+		this.horario = horario;
 	}
 
 	@Transactional
 	public ReservaResponse crear(ReservaRequest request) {
-		validarFechaFutura(request.fechaHora());
+		horario.validar(request.fechaHora());
 		Mascota mascota = buscarMascotaParaActualizar(request.mascotaId());
 		Veterinario veterinario = veterinarioRepository.buscarActivoParaActualizar(request.veterinarioId())
 				.orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
@@ -61,6 +64,26 @@ public class ReservaService {
 
 		Reserva reserva = reservaRepository.save(new Reserva(mascota, veterinario, request.fechaHora()));
 		return toResponse(reserva, "NO_APLICA", null);
+	}
+
+	@Transactional(readOnly = true)
+	public List<String> disponibilidad(Long veterinarioId, LocalDate fecha, Long reservaId) {
+		if (veterinarioId <= 0 || (reservaId != null && reservaId <= 0)) {
+			throw new IllegalArgumentException("Los identificadores deben ser enteros positivos");
+		}
+		if (!veterinarioRepository.existsByIdAndActivoTrue(veterinarioId)) {
+			throw new RecursoNoEncontradoException("Veterinario no encontrado");
+		}
+		Long excluida = null;
+		if (reservaId != null) {
+			Reserva reserva = buscarDetalle(reservaId);
+			validarReprogramable(reserva);
+			if (veterinarioId.equals(reserva.getVeterinario().getId())) {
+				excluida = reservaId;
+			}
+		}
+		return horario.horasLibres(fecha, reservaRepository.horariosOcupados(
+				veterinarioId, horario.desde(fecha), horario.hasta(fecha), ESTADOS_ACTIVOS, excluida));
 	}
 
 	@Transactional(readOnly = true)
@@ -82,20 +105,30 @@ public class ReservaService {
 
 	@Transactional
 	public ReservaResponse actualizar(Long id, ReservaUpdateRequest request) {
-		validarFechaFutura(request.fechaHora());
+		horario.validar(request.fechaHora());
 		Reserva reserva = buscarParaActualizar(id);
-		if (reserva.getEstado() == EstadoReserva.CANCELADA
-				|| reserva.getEstado() == EstadoReserva.ATENDIDA) {
-			throw new ConflictoException("La reserva ya no puede ser modificada");
-		}
+		validarReprogramable(reserva);
 		Mascota mascota = buscarMascotaParaActualizar(reserva.getMascota().getId());
 		Veterinario veterinario = veterinarioRepository.buscarActivoParaActualizar(request.veterinarioId())
 				.orElseThrow(() -> new RecursoNoEncontradoException("Veterinario no encontrado"));
 		validarDisponibilidad(mascota.getId(), veterinario.getId(), request.fechaHora(), id);
 
+		LocalDateTime horaAnterior = reserva.getFechaHora();
+		Veterinario veterinarioAnterior = reserva.getVeterinario();
+		boolean cambio = !horaAnterior.equals(request.fechaHora())
+				|| !veterinarioAnterior.getId().equals(veterinario.getId());
 		reserva.setVeterinario(veterinario);
 		reserva.setFechaHora(request.fechaHora());
-		return toResponse(reserva, "NO_APLICA", atencionRepository.findByReservaId(id).orElse(null));
+		String resultado = cambio && reserva.getEstado() == EstadoReserva.CONFIRMADA
+				? notificacionService.registrarReprogramacion(reserva, horaAnterior, veterinarioAnterior)
+				: "NO_APLICA";
+		return toResponse(reserva, resultado, atencionRepository.findByReservaId(id).orElse(null));
+	}
+
+	private void validarReprogramable(Reserva reserva) {
+		if (!ESTADOS_ACTIVOS.contains(reserva.getEstado())) {
+			throw new ConflictoException("La reserva ya no puede ser modificada");
+		}
 	}
 
 	@Transactional
@@ -147,23 +180,13 @@ public class ReservaService {
 			Long veterinarioId,
 			LocalDateTime fechaHora,
 			Long reservaExcluida) {
-		boolean veterinarioOcupado;
-		boolean mascotaOcupada;
-		if (reservaExcluida == null) {
-			veterinarioOcupado = reservaRepository.existsByVeterinarioIdAndFechaHoraAndEstadoIn(
-					veterinarioId, fechaHora, ESTADOS_ACTIVOS);
-			mascotaOcupada = reservaRepository.existsByMascotaIdAndFechaHoraAndEstadoIn(
-					mascotaId, fechaHora, ESTADOS_ACTIVOS);
-		} else {
-			veterinarioOcupado = reservaRepository.existsByVeterinarioIdAndFechaHoraAndEstadoInAndIdNot(
-					veterinarioId, fechaHora, ESTADOS_ACTIVOS, reservaExcluida);
-			mascotaOcupada = reservaRepository.existsByMascotaIdAndFechaHoraAndEstadoInAndIdNot(
-					mascotaId, fechaHora, ESTADOS_ACTIVOS, reservaExcluida);
-		}
-		if (veterinarioOcupado) {
+		LocalDateTime desde = horario.limiteInferior(fechaHora);
+		LocalDateTime hasta = horario.fin(fechaHora);
+		if (!reservaRepository.horariosOcupados(
+				veterinarioId, desde, hasta, ESTADOS_ACTIVOS, reservaExcluida).isEmpty()) {
 			throw new ConflictoException("El veterinario ya posee una reserva activa en ese horario");
 		}
-		if (mascotaOcupada) {
+		if (reservaRepository.mascotaOcupada(mascotaId, desde, hasta, ESTADOS_ACTIVOS, reservaExcluida)) {
 			throw new ConflictoException("La mascota ya posee una reserva activa en ese horario");
 		}
 	}
@@ -175,12 +198,6 @@ public class ReservaService {
 			case CONFIRMADA -> siguiente == EstadoReserva.CANCELADA;
 			case CANCELADA, ATENDIDA -> false;
 		};
-	}
-
-	private void validarFechaFutura(LocalDateTime fechaHora) {
-		if (!fechaHora.isAfter(LocalDateTime.now())) {
-			throw new IllegalArgumentException("La fecha y hora deben estar en el futuro");
-		}
 	}
 
 	private Reserva buscarDetalle(Long id) {

@@ -9,15 +9,18 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.UUID;
 
 @Entity
-@Table(name = "notificaciones_pendientes", uniqueConstraints =
-		@UniqueConstraint(name = "uk_notificacion_reserva_estado", columnNames = {"reserva_id", "estado_reserva"}))
+@Table(name = "notificaciones_pendientes")
 public class NotificacionPendiente {
+	private static final DateTimeFormatter HORA_CORREO = DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm");
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -28,6 +31,8 @@ public class NotificacionPendiente {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "estado_reserva", nullable = false, length = 20)
 	private EstadoReserva estadoReserva;
+	@Column(name = "es_reprogramacion", nullable = false)
+	private boolean esReprogramacion;
 	@Column(nullable = false, length = 254)
 	private String destinatario;
 	@Column(nullable = false, length = 200)
@@ -58,13 +63,38 @@ public class NotificacionPendiente {
 	}
 
 	public NotificacionPendiente(Reserva reserva, Instant ahora) {
+		this(reserva, ahora, false, "Reserva " + reserva.getEstado().name().toLowerCase(Locale.ROOT),
+				"La reserva de " + reserva.getMascota().getNombre() + " para " + reserva.getFechaHora()
+						+ " quedó " + reserva.getEstado().name().toLowerCase(Locale.ROOT) + ".");
+	}
+
+	public static NotificacionPendiente reprogramacion(Reserva reserva, LocalDateTime horaAnterior,
+			Veterinario veterinarioAnterior, Instant ahora) {
+		String mensaje = """
+				La reserva de %s fue reprogramada (hora local de Santiago).
+				Horario anterior: %s.
+				Nuevo horario: %s.
+				""".formatted(reserva.getMascota().getNombre(), horaAnterior.format(HORA_CORREO),
+				reserva.getFechaHora().format(HORA_CORREO));
+		Veterinario nuevoVeterinario = reserva.getVeterinario();
+		if (!veterinarioAnterior.getId().equals(nuevoVeterinario.getId())) {
+			mensaje += "Veterinario anterior: " + veterinarioAnterior.getNombre()
+					+ ".\nNuevo veterinario: " + nuevoVeterinario.getNombre() + ".\n";
+		} else {
+			mensaje += "Veterinario: " + nuevoVeterinario.getNombre() + ".\n";
+		}
+		return new NotificacionPendiente(reserva, ahora, true, "Reserva reprogramada", mensaje);
+	}
+
+	private NotificacionPendiente(Reserva reserva, Instant ahora, boolean esReprogramacion, String asunto,
+			String mensaje) {
 		claveEvento = UUID.randomUUID().toString();
 		reservaId = reserva.getId();
 		estadoReserva = reserva.getEstado();
+		this.esReprogramacion = esReprogramacion;
 		destinatario = reserva.getMascota().getCliente().getEmail();
-		asunto = "Reserva " + estadoReserva.name().toLowerCase(java.util.Locale.ROOT);
-		mensaje = "La reserva de " + reserva.getMascota().getNombre() + " para " + reserva.getFechaHora()
-				+ " quedó " + estadoReserva.name().toLowerCase(java.util.Locale.ROOT) + ".";
+		this.asunto = asunto;
+		this.mensaje = mensaje;
 		estado = EstadoNotificacion.PENDIENTE;
 		creadaEn = ahora;
 		actualizadaEn = ahora;

@@ -21,9 +21,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -230,7 +234,7 @@ class BackendEndpointsTests {
 		Cliente cliente = cliente("Etapa3 Inactivo", "inactivo");
 		Mascota mascota = mascota(cliente, "Activa");
 		Veterinario vet = veterinario("inactivo");
-		LocalDateTime hora = LocalDateTime.now().plusDays(3).withNano(0);
+		LocalDateTime hora = diaFuturo().atTime(10, 0);
 		long reservaId = request("POST", "/api/reservas", 201, datosReserva(mascota, vet, hora))
 				.get("id").asLong();
 		cliente.setActivo(false);
@@ -249,7 +253,7 @@ class BackendEndpointsTests {
 		Mascota mascota2 = mascota(cliente, "Dos");
 		Veterinario vet1 = veterinario("reglas1");
 		Veterinario vet2 = veterinario("reglas2");
-		LocalDateTime hora = LocalDateTime.now().plusDays(4).withNano(0);
+		LocalDateTime hora = diaFuturo().atTime(10, 0);
 		long id = request("POST", "/api/reservas", 201, datosReserva(mascota1, vet1, hora)).get("id").asLong();
 		request("POST", "/api/reservas", 409, datosReserva(mascota2, vet1, hora));
 		request("POST", "/api/reservas", 409, datosReserva(mascota1, vet2, hora));
@@ -273,7 +277,7 @@ class BackendEndpointsTests {
 	void cancelacionLiberaHorarioYRestringeCambios() throws Exception {
 		Mascota mascota = mascota(cliente("Etapa3 Cancelacion", "cancelacion"), "Cancelacion");
 		Veterinario vet = veterinario("cancelacion");
-		LocalDateTime hora = LocalDateTime.now().plusDays(4).withNano(0);
+		LocalDateTime hora = diaFuturo().atTime(10, 0);
 		long id = request("POST", "/api/reservas", 201, datosReserva(mascota, vet, hora)).get("id").asLong();
 		request("PATCH", "/api/reservas/" + id + "/estado", 200, Map.of("estado", "CONFIRMADA"));
 		request("PATCH", "/api/reservas/" + id + "/estado", 200, Map.of("estado", "CANCELADA"));
@@ -285,6 +289,101 @@ class BackendEndpointsTests {
 		request("POST", "/api/reservas", 404, datosReserva(mascota, vet, hora.plusHours(2)));
 		request("DELETE", "/api/mascotas/" + mascota.getId(), 204, null);
 		request("POST", "/api/reservas", 404, datosReserva(mascota, vet, hora.plusHours(3)));
+	}
+
+	@Test
+	void disponibilidadOrdenadaRespetaHorarioYRechazaHorasFueraDeBloque() throws Exception {
+		Mascota paciente = mascota(cliente("Disponibilidad", "limites"), "Luna");
+		Veterinario vet = veterinario("limites");
+		LocalDate dia = diaFuturo();
+		List<String> libres = horas(vet, dia, "");
+		assertThat(libres).hasSize(21).isSorted().startsWith("08:30").endsWith("18:30");
+		request("POST", "/api/reservas", 201, datosReserva(paciente, vet, dia.atTime(8, 30)));
+		request("POST", "/api/reservas", 201, datosReserva(paciente, vet, dia.atTime(18, 30)));
+		assertThat(horas(vet, dia, "")).hasSize(19).doesNotContain("08:30", "18:30");
+		for (String valor : List.of("08:00", "09:15", "10:00:01", "19:00")) {
+			assertThat(request("POST", "/api/reservas", 400,
+					datosReserva(paciente, vet, dia.atTime(LocalTime.parse(valor))))
+					.get("mensaje").asString()).contains("bloque de 30 minutos");
+		}
+		assertThat(horas(vet, dia.minusYears(1), "")).isEmpty();
+		String ruta = "/api/veterinarios/" + vet.getId() + "/disponibilidad";
+		assertApiError(request("GET", ruta + "?fecha=2026-02-30", 400, null), 400, ruta);
+		assertApiError(request("GET", ruta + "?fecha=2026-2-01", 400, null), 400, ruta);
+		assertApiError(request("GET", ruta, 400, null), 400, ruta);
+		String inexistente = "/api/veterinarios/9223372036854775806/disponibilidad";
+		assertApiError(request("GET", inexistente + "?fecha=" + dia, 404, null), 404, inexistente);
+	}
+
+	@Test
+	void citasAntiguasBloqueanBloquesSolapadosYLaCancelacionLosLibera() throws Exception {
+		Cliente cliente = cliente("Disponibilidad", "solapamiento");
+		Mascota paciente = mascota(cliente, "Luna");
+		Mascota otro = mascota(cliente, "Sol");
+		Veterinario vet = veterinario("solapamiento");
+		Veterinario otroVet = veterinario("solapamiento2");
+		LocalDate dia = diaFuturo();
+		Reserva antigua = reserva(paciente, vet, dia.atTime(10, 15), EstadoReserva.PENDIENTE);
+		String ruta = "/api/reservas/" + antigua.getId();
+		assertThat(horas(vet, dia, "")).contains("09:30", "11:00").doesNotContain("10:00", "10:30");
+		assertThat(horas(otroVet, dia, "")).contains("10:00", "10:30");
+		assertThat(request("POST", "/api/reservas", 409, datosReserva(otro, vet, dia.atTime(10, 0)))
+				.get("mensaje").asString()).contains("veterinario");
+		assertThat(request("POST", "/api/reservas", 409, datosReserva(paciente, otroVet, dia.atTime(10, 30)))
+				.get("mensaje").asString()).contains("mascota");
+		request("PATCH", ruta + "/estado", 200, Map.of("estado", "CONFIRMADA"));
+		assertThat(horas(vet, dia, "")).doesNotContain("10:30");
+		request("PATCH", ruta + "/estado", 200, Map.of("estado", "CANCELADA"));
+		assertThat(horas(vet, dia, "")).contains("10:00", "10:30");
+		assertThat(request("GET", ruta, 200, null).get("fechaHora").asString()).startsWith(dia + "T10:15");
+	}
+
+	@Test
+	void reprogramacionSoloExcluyeLaReservaPropiaDelProfesionalConsultado() throws Exception {
+		Cliente cliente = cliente("Disponibilidad", "reprogramacion");
+		Mascota paciente = mascota(cliente, "Luna");
+		Mascota otro = mascota(cliente, "Sol");
+		Veterinario vet = veterinario("reprogramacion");
+		Veterinario otroVet = veterinario("reprogramacion2");
+		LocalDate dia = diaFuturo();
+		long id = request("POST", "/api/reservas", 201, datosReserva(paciente, vet, dia.atTime(10, 0)))
+				.get("id").asLong();
+		request("POST", "/api/reservas", 201, datosReserva(otro, otroVet, dia.atTime(10, 0)));
+		assertThat(horas(vet, dia, "&reservaId=" + id)).contains("10:00");
+		assertThat(horas(otroVet, dia, "&reservaId=" + id)).doesNotContain("10:00");
+		String ruta = "/api/reservas/" + id;
+		request("PUT", ruta, 400, Map.of("veterinarioId", vet.getId(), "fechaHora", dia + "T10:15"));
+		request("PUT", ruta, 409, Map.of("veterinarioId", otroVet.getId(), "fechaHora", dia + "T10:00"));
+		request("PUT", ruta, 200, Map.of("veterinarioId", vet.getId(), "fechaHora", dia + "T10:30"));
+		assertThat(horas(vet, dia, "")).contains("10:00").doesNotContain("10:30");
+	}
+
+	@Test
+	void dosSolicitudesConcurrentesPorElMismoCupoSoloCreanUnaReserva() throws Exception {
+		Cliente cliente = cliente("Disponibilidad", "concurrencia");
+		Veterinario vet = veterinario("concurrencia");
+		LocalDateTime hora = diaFuturo().atTime(10, 0);
+		List<CompletableFuture<HttpResponse<String>>> respuestas = new ArrayList<>();
+		for (Mascota paciente : List.of(mascota(cliente, "Luna"), mascota(cliente, "Sol"))) {
+			String body = json.writeValueAsString(datosReserva(paciente, vet, hora));
+			HttpRequest solicitud = HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/api/reservas"))
+					.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build();
+			respuestas.add(http.sendAsync(solicitud, HttpResponse.BodyHandlers.ofString()));
+		}
+		CompletableFuture.allOf(respuestas.toArray(CompletableFuture<?>[]::new)).get(15, TimeUnit.SECONDS);
+		assertThat(respuestas.stream().map(r -> r.join().statusCode()).toList()).containsExactlyInAnyOrder(201, 409);
+		assertThat(reservas.count()).isEqualTo(1L);
+	}
+
+	private LocalDate diaFuturo() {
+		return LocalDate.now(ZoneId.of("America/Santiago")).plusDays(4);
+	}
+
+	private List<String> horas(Veterinario vet, LocalDate dia, String extra) throws Exception {
+		List<String> horas = new ArrayList<>();
+		request("GET", "/api/veterinarios/" + vet.getId() + "/disponibilidad?fecha=" + dia + extra, 200, null)
+				.forEach(hora -> horas.add(hora.asString()));
+		return horas;
 	}
 
 	private Cliente cliente(String nombre, String clave) {

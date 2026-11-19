@@ -106,4 +106,5 @@ export function formulario({ nombre, campos, guardar, enviar, terminado, aviso, 
     }
   });
   mostrarPanel(nombre, form);
+  return submit;
 }

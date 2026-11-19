@@ -34,27 +34,32 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 			@Param("hasta") LocalDateTime hasta,
 			@Param("veterinarioId") Long veterinarioId);
 
-	boolean existsByVeterinarioIdAndFechaHoraAndEstadoIn(
+	// Otra cita de 30 minutos se solapa cuando su inicio queda estrictamente entre ambos límites.
+	@Query("""
+			select r.fechaHora from Reserva r
+			where r.veterinario.id = :veterinarioId and r.estado in :estados
+			  and r.fechaHora > :desde and r.fechaHora < :hasta
+			  and (cast(:excluida as Long) is null or r.id <> :excluida)
+			""")
+	List<LocalDateTime> horariosOcupados(
 			Long veterinarioId,
-			LocalDateTime fechaHora,
-			Collection<EstadoReserva> estados);
-
-	boolean existsByMascotaIdAndFechaHoraAndEstadoIn(
-			Long mascotaId,
-			LocalDateTime fechaHora,
-			Collection<EstadoReserva> estados);
-
-	boolean existsByVeterinarioIdAndFechaHoraAndEstadoInAndIdNot(
-			Long veterinarioId,
-			LocalDateTime fechaHora,
+			LocalDateTime desde,
+			LocalDateTime hasta,
 			Collection<EstadoReserva> estados,
-			Long id);
+			Long excluida);
 
-	boolean existsByMascotaIdAndFechaHoraAndEstadoInAndIdNot(
+	@Query("""
+			select count(r) > 0 from Reserva r
+			where r.mascota.id = :mascotaId and r.estado in :estados
+			  and r.fechaHora > :desde and r.fechaHora < :hasta
+			  and (cast(:excluida as Long) is null or r.id <> :excluida)
+			""")
+	boolean mascotaOcupada(
 			Long mascotaId,
-			LocalDateTime fechaHora,
+			LocalDateTime desde,
+			LocalDateTime hasta,
 			Collection<EstadoReserva> estados,
-			Long id);
+			Long excluida);
 
 	@EntityGraph(attributePaths = {"mascota", "mascota.cliente", "veterinario"})
 	@Query("select r from Reserva r where r.id = :id")

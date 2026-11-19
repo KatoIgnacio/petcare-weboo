@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import cl.bello.petcare.config.NotificacionProperties;
 import cl.bello.petcare.dto.EstadoReservaRequest;
+import cl.bello.petcare.dto.ReservaUpdateRequest;
 import cl.bello.petcare.entity.Cliente;
 import cl.bello.petcare.entity.EstadoNotificacion;
 import cl.bello.petcare.entity.EstadoReserva;
@@ -89,7 +90,7 @@ class NotificacionesTests {
 		Mascota mascota = mascotas.saveAndFlush(new Mascota(cliente, "Etapa4 Milo", "Gato", "Mestizo",
 				LocalDate.of(2022, 1, 1), BigDecimal.TEN));
 		Veterinario vet = veterinarios.saveAndFlush(new Veterinario("Etapa4 Vet", "General", "vet4@example.invalid"));
-		reserva = reservas.saveAndFlush(new Reserva(mascota, vet, LocalDateTime.now().plusDays(2)));
+		reserva = reservas.saveAndFlush(new Reserva(mascota, vet, LocalDateTime.of(2026, 11, 19, 10, 0)));
 		transaction = new TransactionTemplate(manager);
 		when(client.enviar(any(), any())).thenReturn(new ResultadoEnvio(EstadoNotificacion.ACEPTADA,
 				UUID.randomUUID().toString(), null));
@@ -120,6 +121,62 @@ class NotificacionesTests {
 		dispatcher.procesarPendientes();
 		dispatcher.procesarPendientes();
 		verify(client).enviar(any(), any());
+	}
+
+	@Test
+	void cadaReprogramacionConfirmadaEncolaUnCorreoConLosDatosAnterioresYNuevos() {
+		confirmar();
+		var claveConfirmacion = ultimo().getClaveEvento();
+		var mismoVet = reserva.getVeterinario();
+		var horaNueva = reserva.getFechaHora().plusMinutes(30);
+		var cambioHora = servicio.actualizar(reserva.getId(), new ReservaUpdateRequest(mismoVet.getId(), horaNueva));
+		var primerAviso = ultimo();
+		assertThat(cambioHora.estado()).isEqualTo(EstadoReserva.CONFIRMADA);
+		assertThat(cambioHora.resultadoNotificacion()).isEqualTo("PENDIENTE:" + primerAviso.getClaveEvento());
+		assertThat(primerAviso.getClaveEvento()).isNotEqualTo(claveConfirmacion);
+		assertThat(primerAviso.solicitud().destinatario()).isEqualTo("etapa4@example.invalid");
+		assertThat(primerAviso.solicitud().asunto()).isEqualTo("Reserva reprogramada");
+		assertThat(primerAviso.solicitud().mensaje())
+				.contains("Etapa4 Milo", "Horario anterior: 19/11/2026 10:00", "Nuevo horario: 19/11/2026 10:30");
+		var nuevoVet = veterinarios.saveAndFlush(new Veterinario("Dra. Nueva", "General", "nueva@example.invalid"));
+		var cambioVet = new ReservaUpdateRequest(nuevoVet.getId(), horaNueva);
+		assertThat(servicio.actualizar(reserva.getId(), cambioVet).resultadoNotificacion()).startsWith("PENDIENTE:");
+		var segundoAviso = ultimo();
+		assertThat(segundoAviso.getClaveEvento()).isNotEqualTo(primerAviso.getClaveEvento());
+		assertThat(segundoAviso.solicitud().mensaje()).contains("Veterinario anterior: Etapa4 Vet", "Nuevo veterinario: Dra. Nueva");
+		assertThat(servicio.actualizar(reserva.getId(), cambioVet).resultadoNotificacion()).isEqualTo("NO_APLICA");
+		assertThat(eventos.count()).isEqualTo(3);
+		verifyNoInteractions(client);
+		dispatcher.procesarPendientes();
+		assertThat(servicio.obtener(reserva.getId()).resultadoNotificacion()).startsWith("ACEPTADA:");
+		verify(client).enviar(primerAviso.getClaveEvento(), primerAviso.solicitud());
+		verify(client).enviar(segundoAviso.getClaveEvento(), segundoAviso.solicitud());
+	}
+
+	@Test
+	void reprogramarPendienteEsSilenciosoYLaConfirmacionAvisaLaHoraDefinitiva() {
+		var nueva = reserva.getFechaHora().plusHours(1);
+		var resultado = servicio.actualizar(reserva.getId(), new ReservaUpdateRequest(reserva.getVeterinario().getId(), nueva));
+		assertThat(resultado.resultadoNotificacion()).isEqualTo("NO_APLICA");
+		assertThat(eventos.count()).isZero();
+		confirmar();
+		assertThat(ultimo().solicitud().asunto()).isEqualTo("Reserva confirmada");
+		assertThat(ultimo().solicitud().mensaje()).contains(nueva.toString());
+	}
+
+	@Test
+	void rollbackDeReprogramacionConservaLaHoraYNoEncolaOtroCorreo() {
+		confirmar();
+		String claveConfirmacion = ultimo().getClaveEvento();
+		transaction.executeWithoutResult(status -> {
+			var cambio = new ReservaUpdateRequest(reserva.getVeterinario().getId(), reserva.getFechaHora().plusHours(1));
+			assertThat(servicio.actualizar(reserva.getId(), cambio).resultadoNotificacion()).startsWith("PENDIENTE:");
+			status.setRollbackOnly();
+		});
+		assertThat(eventos.count()).isOne();
+		assertThat(ultimo().getClaveEvento()).isEqualTo(claveConfirmacion);
+		assertThat(servicio.obtener(reserva.getId()).fechaHora()).isEqualTo(reserva.getFechaHora());
+		verifyNoInteractions(client);
 	}
 
 	@Test

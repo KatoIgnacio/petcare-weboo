@@ -2,199 +2,1912 @@
   "info": {
     "_postman_id": "08fd0499-28b9-472e-81e8-79d4bf67186a",
     "name": "PetCare - Flujo de demostración",
-    "description": "Prueba el backend Spring Boot y las tres APIs externas comprometidas en el reporte.",
+    "description": "Verificación de E01–E10 y disponibilidad. Ejecutar la colección completa y en orden, contra una base separada y Node con Mailpit. El inicio genera datos nuevos y bloques futuros de la clínica en America/Santiago. La aceptación SMTP se comprueba aparte en Mailpit.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "if (!pm.environment.get('sufijo')) {",
-          "  const sufijo = Date.now().toString();",
-          "  pm.environment.set('sufijo', sufijo);",
-          "  const fecha = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);",
-          "  fecha.setSeconds(0, 0);",
-          "  pm.environment.set('fechaReserva', fecha.toISOString().replace('Z', ''));",
-          "}"
-        ]
-      }
-    }
-  ],
   "item": [
     {
-      "name": "01 - Crear cliente",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email\": \"ana.{{sufijo}}@ejemplo.cl\",\n  \"telefono\": \"+56911111111\"\n}"
+      "name": "01 · Preparación y fichas",
+      "description": "Ejecutar desde Configuración. Las variables de corrida se generan de nuevo al inicio.",
+      "item": [
+        {
+          "name": "Configuración e inicio de una corrida nueva",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/configuracion"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Este request debe ser el primero del recorrido. Sobrescribe el estado de una corrida anterior.",
+                  "const run = pm.variables.replaceIn('{{$guid}}');",
+                  "if (!/^[a-f0-9-]{36}$/i.test(run)) throw new Error('No se pudo generar el identificador de la corrida');",
+                  "const now = Date.now();",
+                  "// Date.prototype usa la zona IANA incluso cuando el sandbox no expone el global Intl.",
+                  "const fecha = millis => {",
+                  "  const value = new Date(millis).toLocaleString('sv-SE', {",
+                  "    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',",
+                  "    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false",
+                  "  }).replace(' ', 'T');",
+                  "  if (!/^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):\\d{2}:\\d{2}$/.test(value)) {",
+                  "    throw new Error('El ejecutor no admite el formato horario de America/Santiago');",
+                  "  }",
+                  "  return value;",
+                  "};",
+                  "const ids = ['clienteId', 'mascotaId', 'veterinarioId', 'reservaId', 'reservaCanceladaId', 'atencionId',",
+                  "  'eventoConfirmacion', 'eventoCancelacion', 'acuseConfirmacion', 'acuseCancelacion', 'idNotificacion',",
+                  "  'limiteConfirmacion', 'limiteCancelacion'];",
+                  "ids.forEach(id => pm.collectionVariables.unset(id));",
+                  "// Los registros son nuevos en cada corrida; las horas se eligen de bloques válidos.",
+                  "const diaReserva = fecha(now + 4 * 86400000).slice(0, 10);",
+                  "const horaReserva = parseInt(run.slice(0, 2), 16) % 2 === 0 ? '08:30' : '09:00';",
+                  "const values = {",
+                  "  sufijo: run, correo: 'etapa7.postman.' + run + '@example.invalid',",
+                  "  correoDirecto: 'etapa7.directo.' + run + '@example.invalid',",
+                  "  horaLocalInicio: fecha(now), fechaReserva: diaReserva + 'T' + horaReserva + ':00',",
+                  "  fechaReprogramada: diaReserva + 'T18:30:00',",
+                  "  fechaCancelacion: fecha(now + 5 * 86400000).slice(0, 10) + 'T10:30:00',",
+                  "  fechaPasada: fecha(now - 4 * 86400000).slice(0, 10) + 'T10:00:00'",
+                  "};",
+                  "Object.entries(values).forEach(([key, value]) => pm.collectionVariables.set(key, value));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Spring publica la API externa del entorno, con la hora de clínica futura\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"externalApiUrl\");",
+                  "    const canon = url => url.replace(/\\/$/, '').replace('://localhost:', '://127.0.0.1:');",
+                  "    pm.expect(canon(b.externalApiUrl)).to.eql(canon(pm.variables.replaceIn(\"{{externalUrl}}\")));",
+                  "    pm.expect(v('fechaReserva')).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$/);",
+                  "    pm.expect(v('fechaReserva') > v('horaLocalInicio')).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{baseUrl}}/api/clientes"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Cliente creado', () => pm.response.to.have.status(201));",
-          "pm.environment.set('clienteId', pm.response.json().id);"
-        ] }
-      }]
-    },
-    {
-      "name": "02 - Crear mascota",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"nombre\": \"Luna\",\n  \"especie\": \"Perro\",\n  \"raza\": \"Mestiza\",\n  \"fechaNacimiento\": \"2021-04-10\",\n  \"peso\": 12.5\n}"
+        {
+          "name": "E01 · Rechazar email inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Cliente {{sufijo}}\",\n  \"email\": \"correo-invalido\",\n  \"telefono\": \"+56912345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/clientes\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"datos inválidos\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "    pm.expect(b.detalles.some(detalle => detalle.startsWith(\"email: \"))).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Mascota creada', () => pm.response.to.have.status(201));",
-          "pm.environment.set('mascotaId', pm.response.json().id);"
-        ] }
-      }]
-    },
-    {
-      "name": "03 - Listar mascotas del cliente",
-      "request": { "method": "GET", "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas" },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Lista disponible', () => pm.response.to.have.status(200));",
-          "pm.test('Incluye la mascota', () => pm.expect(pm.response.json().length).to.be.above(0));"
-        ] }
-      }]
-    },
-    {
-      "name": "04 - Crear veterinario",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"nombre\": \"Dr. Carlos Díaz\",\n  \"especialidad\": \"Medicina general\",\n  \"email\": \"carlos.{{sufijo}}@petcare.cl\"\n}"
+        {
+          "name": "E01 · Crear cliente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Cliente {{sufijo}}\",\n  \"email\": \"{{correo}}\",\n  \"telefono\": \"+56912345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Identidad del cliente y Location\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.email).to.eql(v('correo'));",
+                  "    pm.expect(b.nombre).to.eql(pm.variables.replaceIn(\"Etapa7 Cliente {{sufijo}}\"));",
+                  "    pm.expect(b.activo).to.eql(true);",
+                  "    pm.expect(pm.response.headers.get('Location')).to.eql(\"/api/clientes/\" + b.id);",
+                  "  });",
+                  "  save('clienteId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{baseUrl}}/api/veterinarios"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Veterinario creado', () => pm.response.to.have.status(201));",
-          "pm.environment.set('veterinarioId', pm.response.json().id);"
-        ] }
-      }]
-    },
-    {
-      "name": "05 - Crear reserva",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaReserva}}\"\n}"
+        {
+          "name": "E01 · Email duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Cliente {{sufijo}}\",\n  \"email\": \"{{correo}}\",\n  \"telefono\": \"+56912345678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(409);",
+                  "    pm.expect(b.error).to.eql(\"Conflict\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/clientes\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"email\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{baseUrl}}/api/reservas"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Reserva creada', () => pm.response.to.have.status(201));",
-          "pm.test('Estado pendiente', () => pm.expect(pm.response.json().estado).to.eql('PENDIENTE'));",
-          "pm.environment.set('reservaId', pm.response.json().id);"
-        ] }
-      }]
-    },
-    {
-      "name": "06 - Confirmar reserva y notificar",
-      "request": {
-        "method": "PATCH",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"estado\": \"CONFIRMADA\"\n}" },
-        "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Reserva confirmada', () => pm.response.to.have.status(200));",
-          "pm.test('Estado confirmado', () => pm.expect(pm.response.json().estado).to.eql('CONFIRMADA'));"
-        ] }
-      }]
-    },
-    {
-      "name": "07 - Registrar atención",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"diagnostico\": \"Dermatitis leve\",\n  \"tratamiento\": \"Tratamiento tópico por siete días\",\n  \"medicamentos\": [\"Clorhexidina\"],\n  \"observaciones\": \"Control en una semana\"\n}"
+        {
+          "name": "Editar cliente",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Cliente Editado {{sufijo}}\",\n  \"email\": \"{{correo}}\",\n  \"telefono\": \"+56987654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Conserva el identificador y actualiza los datos\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('clienteId')));",
+                  "    pm.expect(b.nombre).to.eql(pm.variables.replaceIn(\"Etapa7 Cliente Editado {{sufijo}}\"));",
+                  "    pm.expect(b.telefono).to.eql(\"+56987654321\");",
+                  "    pm.expect(b.email).to.eql(v('correo'));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{baseUrl}}/api/reservas/{{reservaId}}/atencion"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Atención registrada', () => pm.response.to.have.status(201));"
-        ] }
-      }]
-    },
-    {
-      "name": "08 - Consultar reserva atendida",
-      "request": { "method": "GET", "url": "{{baseUrl}}/api/reservas/{{reservaId}}" },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Reserva disponible', () => pm.response.to.have.status(200));",
-          "pm.test('Reserva atendida', () => pm.expect(pm.response.json().estado).to.eql('ATENDIDA'));"
-        ] }
-      }]
-    },
-    {
-      "name": "09 - Buscar medicamento externo",
-      "request": { "method": "GET", "url": "{{externalUrl}}/api/medicamentos?nombre=amoxicilina" },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Medicamento encontrado', () => pm.response.to.have.status(200));"
-        ] }
-      }]
-    },
-    {
-      "name": "10 - Consultar ubicación externa",
-      "request": { "method": "GET", "url": "{{externalUrl}}/api/ubicacion-clinica" },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Ubicación disponible', () => pm.response.to.have.status(200));",
-          "pm.test('Incluye coordenadas', () => pm.expect(pm.response.json()).to.have.keys('latitud', 'longitud'));"
-        ] }
-      }]
-    },
-    {
-      "name": "11 - Notificación externa directa",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"destinatario\": \"ana.{{sufijo}}@ejemplo.cl\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Reserva confirmada\",\n  \"mensaje\": \"Su reserva fue confirmada\",\n  \"reservaId\": {{reservaId}}\n}"
+        {
+          "name": "Listar clientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"El cliente activo editado figura en el listado\", () => {",
+                  "    const cliente = b.find(item => item.id === Number(v('clienteId')));",
+                  "    pm.expect(cliente.nombre).to.eql(pm.variables.replaceIn(\"Etapa7 Cliente Editado {{sufijo}}\"));",
+                  "    pm.expect(cliente.email).to.eql(v('correo'));",
+                  "    pm.expect(cliente.activo).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{externalUrl}}/api/notificaciones"
-      },
-      "event": [{
-        "listen": "test",
-        "script": { "type": "text/javascript", "exec": [
-          "pm.test('Notificación aceptada', () => pm.response.to.have.status(202));"
-        ] }
-      }]
+        {
+          "name": "E02 · Rechazar peso inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Nube {{sufijo}}\",\n  \"especie\": \"Canina\",\n  \"raza\": \"Mestiza\",\n  \"fechaNacimiento\": \"2020-06-15\",\n  \"peso\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/clientes/{{clienteId}}/mascotas\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"datos inválidos\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "    pm.expect(b.detalles.some(detalle => detalle.startsWith(\"peso: \"))).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E02 · Crear mascota",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Nube {{sufijo}}\",\n  \"especie\": \"Canina\",\n  \"raza\": \"Mestiza\",\n  \"fechaNacimiento\": \"2020-06-15\",\n  \"peso\": 10.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Mascota asociada y datos guardados\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.clienteId).to.eql(Number(v('clienteId')));",
+                  "    pm.expect(b.nombre).to.eql(pm.variables.replaceIn(\"Etapa7 Nube {{sufijo}}\"));",
+                  "    pm.expect(b.peso).to.eql(10.5);",
+                  "    pm.expect(b.activo).to.eql(true);",
+                  "    pm.expect(pm.response.headers.get('Location')).to.eql(\"/api/mascotas/\" + b.id);",
+                  "  });",
+                  "  save('mascotaId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E03 · Listar mascotas del cliente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes/{{clienteId}}/mascotas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Devuelve la mascota de este cliente\", () => {",
+                  "    pm.expect(b.length).to.eql(1);",
+                  "    pm.expect(b[0].id).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b[0].clienteId).to.eql(Number(v('clienteId')));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E03 · Cliente inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/clientes/9223372036854775807/mascotas"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "if (pm.response.code === 404) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.error).to.eql(\"Not Found\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/clientes/9223372036854775807/mascotas\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"Cliente no encontrado\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear veterinario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/veterinarios",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Etapa7 Veterinaria {{sufijo}}\",\n  \"especialidad\": \"Medicina general\",\n  \"email\": \"etapa7.vet.{{sufijo}}@example.invalid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Veterinario disponible para la agenda\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.email).to.eql(pm.variables.replaceIn(\"etapa7.vet.{{sufijo}}@example.invalid\"));",
+                  "    pm.expect(b.especialidad).to.eql(\"Medicina general\");",
+                  "    pm.expect(b.activo).to.eql(true);",
+                  "    pm.expect(pm.response.headers.get('Location')).to.eql(\"/api/veterinarios/\" + b.id);",
+                  "  });",
+                  "  save('veterinarioId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar veterinarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/veterinarios"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"El veterinario activo figura en el listado\", () => {",
+                  "    const veterinario = b.find(item => item.id === Number(v('veterinarioId')));",
+                  "    pm.expect(veterinario.email).to.eql(pm.variables.replaceIn(\"etapa7.vet.{{sufijo}}@example.invalid\"));",
+                  "    pm.expect(veterinario.activo).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Agenda y reprogramación",
+      "description": "Comprueba hora local, disponibilidad, filtros y reglas de estado.",
+      "item": [
+        {
+          "name": "E04 · Fecha pasada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaPasada}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"deben estar en el futuro\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E04 · Veterinario inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": 9223372036854775807,\n  \"fechaHora\": \"{{fechaReserva}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "if (pm.response.code === 404) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.error).to.eql(\"Not Found\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"Veterinario no encontrado\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E04 · Crear reserva principal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaReserva}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Reserva pendiente a la hora local enviada\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaReserva'));",
+                  "    pm.expect(b.estado).to.eql(\"PENDIENTE\");",
+                  "    pm.expect(b.resultadoNotificacion).to.eql(\"NO_APLICA\");",
+                  "    pm.expect(pm.response.headers.get('Location')).to.eql(\"/api/reservas/\" + b.id);",
+                  "  });",
+                  "  save('reservaId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar horas libres después de reservar",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/veterinarios/{{veterinarioId}}/disponibilidad?fecha={{diaReserva}}"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('diaReserva', pm.collectionVariables.get('fechaReserva').slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Solo aparecen bloques libres de este veterinario', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const horas = pm.response.json();",
+                  "  pm.expect(horas).to.be.an('array').with.lengthOf(20);",
+                  "  pm.expect(horas).not.to.include(pm.collectionVariables.get('fechaReserva').slice(11, 16));",
+                  "  pm.expect(horas).to.include('18:30');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E04 · Rechazar duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaReserva}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(409);",
+                  "    pm.expect(b.error).to.eql(\"Conflict\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"reserva activa\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar reserva inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas/9223372036854775807"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "if (pm.response.code === 404) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(404);",
+                  "    pm.expect(b.error).to.eql(\"Not Found\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/9223372036854775807\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"Reserva no encontrada\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E07 · Prohibir atención sin confirmación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/atencion",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnostico\": \"Control Etapa7 {{sufijo}}\",\n  \"tratamiento\": \"Control de prueba\",\n  \"medicamentos\": [\"Clorhexidina\"],\n  \"observaciones\": \"Seguimiento de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(409);",
+                  "    pm.expect(b.error).to.eql(\"Conflict\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/{{reservaId}}/atencion\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"Solo una reserva confirmada\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E05 · Reprogramar reserva",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaReprogramada}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Conserva la reserva y guarda la nueva hora\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaReprogramada'));",
+                  "    pm.expect(b.estado).to.eql(\"PENDIENTE\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar agenda filtrada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas?fecha={{diaReprogramado}}&veterinarioId={{veterinarioId}}"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('diaReprogramado', pm.collectionVariables.get('fechaReprogramada').slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"La agenda refleja la nueva hora y respeta sus filtros\", () => {",
+                  "    const fila = b.find(item => item.id === Number(v('reservaId')));",
+                  "    pm.expect(fila.estado).to.eql(\"PENDIENTE\");",
+                  "    pm.expect(fila.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(fila.fechaHora.length === 16 ? fila.fechaHora + ':00' : fila.fechaHora).to.eql(v('fechaReprogramada'));",
+                  "    pm.expect(b.every(r => r.fechaHora.startsWith(v('diaReprogramado') + 'T') && r.veterinarioId === Number(v('veterinarioId')))).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Avisos, atención e historial",
+      "description": "E06 registra el cambio; cada GET espera la aceptación SMTP local con límite.",
+      "item": [
+        {
+          "name": "E06 · Estado inválido",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"INEXISTENTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/{{reservaId}}/estado\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"formato JSON válido\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · Confirmar reserva",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CONFIRMADA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Cambio real del estado y evento pendiente\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaReprogramada'));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "    pm.expect(b.resultadoNotificacion).to.match(/^PENDIENTE:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "  });",
+                  "  save('eventoConfirmacion', b.resultadoNotificacion.split(':')[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · Repetir confirmación",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CONFIRMADA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Repetir el estado no crea un aviso\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "    pm.expect(b.resultadoNotificacion).to.eql(\"NO_APLICA\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar aceptación del aviso de confirmación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Estado de la reserva guardado\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.estado).to.eql(\"CONFIRMADA\");",
+                  "  });",
+                  "  const resultado = String(b.resultadoNotificacion);",
+                  "  if (/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(resultado)) {",
+                  "    pm.test(\"SMTP local aceptó el aviso y se guardó el recibo\", () => {",
+                  "      pm.expect(resultado).to.match(/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    });",
+                  "    save('acuseConfirmacion', resultado.split(':')[1]);",
+                  "  } else {",
+                  "    const enCurso = /^(PENDIENTE|EN_PROCESO|PENDIENTE_REINTENTO):/.test(resultado);",
+                  "    const eventoCorrecto = resultado.split(':')[1] === v('eventoConfirmacion');",
+                  "    const limite = Number(v('limiteConfirmacion')) || Date.now() + 30000;",
+                  "    pm.test('El aviso conserva su evento y sigue en curso dentro de 30 s', () => {",
+                  "      pm.expect(enCurso && eventoCorrecto && Date.now() < limite, resultado).to.eql(true);",
+                  "    });",
+                  "    if (enCurso && eventoCorrecto && Date.now() < limite) {",
+                  "      save('limiteConfirmacion', limite);",
+                  "      pm.execution.setNextRequest(pm.info.requestId);",
+                  "      setTimeout(() => {}, 750);",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · Rechazar retroceso a pendiente",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"PENDIENTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(409);",
+                  "    pm.expect(b.error).to.eql(\"Conflict\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/{{reservaId}}/estado\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"transición de estado\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E07 · Diagnóstico vacío",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/atencion",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnostico\": \"\",\n  \"tratamiento\": \"Control de prueba\",\n  \"medicamentos\": [\"Clorhexidina\"],\n  \"observaciones\": \"Seguimiento de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(400);",
+                  "    pm.expect(b.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/{{reservaId}}/atencion\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"datos inválidos\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "    pm.expect(b.detalles.some(detalle => detalle.startsWith(\"diagnostico: \"))).to.eql(true);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E07 · Registrar atención",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}/atencion",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnostico\": \"Control Etapa7 {{sufijo}}\",\n  \"tratamiento\": \"Control de prueba\",\n  \"medicamentos\": [\"Clorhexidina\"],\n  \"observaciones\": \"Seguimiento de prueba\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Atención vinculada y medicamentos guardados\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.reservaId).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.diagnostico).to.eql(pm.variables.replaceIn(\"Control Etapa7 {{sufijo}}\"));",
+                  "    pm.expect(b.medicamentos).to.eql([\"Clorhexidina\"]);",
+                  "  });",
+                  "  save('atencionId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar reserva atendida",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas/{{reservaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Estado, fecha local y atención persistidos\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaReprogramada'));",
+                  "    pm.expect(b.estado).to.eql(\"ATENDIDA\");",
+                  "    pm.expect(b.atencion.id).to.eql(Number(v('atencionId')));",
+                  "    pm.expect(b.resultadoNotificacion).to.eql('ACEPTADA:' + v('acuseConfirmacion'));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar historial de la mascota",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/mascotas/{{mascotaId}}/historial"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Recupera la atención asociada\", () => {",
+                  "    pm.expect(b.length).to.eql(1);",
+                  "    pm.expect(b[0].id).to.eql(Number(v('atencionId')));",
+                  "    pm.expect(b[0].reservaId).to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b[0].diagnostico).to.eql(pm.variables.replaceIn(\"Control Etapa7 {{sufijo}}\"));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E04 · Crear una reserva para cancelar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaCancelacion}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Segunda reserva independiente\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.id).not.to.eql(Number(v('reservaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCancelacion'));",
+                  "    pm.expect(b.estado).to.eql(\"PENDIENTE\");",
+                  "  });",
+                  "  save('reservaCanceladaId', b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · Cancelar segunda reserva",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaCanceladaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CANCELADA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Cambio real del estado y evento pendiente\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaCanceladaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCancelacion'));",
+                  "    pm.expect(b.estado).to.eql(\"CANCELADA\");",
+                  "    pm.expect(b.resultadoNotificacion).to.match(/^PENDIENTE:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "  });",
+                  "  save('eventoCancelacion', b.resultadoNotificacion.split(':')[1]);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · Repetir cancelación",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaCanceladaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CANCELADA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Repetir el estado no crea un aviso\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaCanceladaId')));",
+                  "    pm.expect(b.estado).to.eql(\"CANCELADA\");",
+                  "    pm.expect(b.resultadoNotificacion).to.eql(\"NO_APLICA\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar aceptación del aviso de cancelación",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reservas/{{reservaCanceladaId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Estado de la reserva guardado\", () => {",
+                  "    pm.expect(b.id).to.eql(Number(v('reservaCanceladaId')));",
+                  "    pm.expect(b.estado).to.eql(\"CANCELADA\");",
+                  "  });",
+                  "  const resultado = String(b.resultadoNotificacion);",
+                  "  if (/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/.test(resultado)) {",
+                  "    pm.test(\"SMTP local aceptó el aviso y se guardó el recibo\", () => {",
+                  "      pm.expect(resultado).to.match(/^ACEPTADA:[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    });",
+                  "    save('acuseCancelacion', resultado.split(':')[1]);",
+                  "  } else {",
+                  "    const enCurso = /^(PENDIENTE|EN_PROCESO|PENDIENTE_REINTENTO):/.test(resultado);",
+                  "    const eventoCorrecto = resultado.split(':')[1] === v('eventoCancelacion');",
+                  "    const limite = Number(v('limiteCancelacion')) || Date.now() + 30000;",
+                  "    pm.test('El aviso conserva su evento y sigue en curso dentro de 30 s', () => {",
+                  "      pm.expect(enCurso && eventoCorrecto && Date.now() < limite, resultado).to.eql(true);",
+                  "    });",
+                  "    if (enCurso && eventoCorrecto && Date.now() < limite) {",
+                  "      save('limiteCancelacion', limite);",
+                  "      pm.execution.setNextRequest(pm.info.requestId);",
+                  "      setTimeout(() => {}, 750);",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E06 · No se puede reactivar una cancelada",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas/{{reservaCanceladaId}}/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"CONFIRMADA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"ApiError identifica el motivo y la ruta\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"timestamp\", \"status\", \"error\", \"mensaje\", \"ruta\", \"detalles\");",
+                  "    pm.expect(b.status).to.eql(409);",
+                  "    pm.expect(b.error).to.eql(\"Conflict\");",
+                  "    pm.expect(b.timestamp).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}/);",
+                  "    pm.expect(b.ruta).to.eql(pm.variables.replaceIn(\"/api/reservas/{{reservaCanceladaId}}/estado\"));",
+                  "    pm.expect(b.mensaje).to.contain(\"transición de estado\");",
+                  "    pm.expect(b.detalles).to.be.an('array');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E04 · El horario cancelado queda libre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/reservas",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mascotaId\": {{mascotaId}},\n  \"veterinarioId\": {{veterinarioId}},\n  \"fechaHora\": \"{{fechaCancelacion}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"El mismo horario se puede reservar de nuevo\", () => {",
+                  "    pm.expect(b.id).to.be.a('number').and.above(0);",
+                  "    pm.expect(b.id).not.to.eql(Number(v('reservaCanceladaId')));",
+                  "    pm.expect(b.mascotaId).to.eql(Number(v('mascotaId')));",
+                  "    pm.expect(b.veterinarioId).to.eql(Number(v('veterinarioId')));",
+                  "    pm.expect(b.fechaHora.length === 16 ? b.fechaHora + ':00' : b.fechaHora).to.eql(v('fechaCancelacion'));",
+                  "    pm.expect(b.estado).to.eql(\"PENDIENTE\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 · API externa",
+      "description": "Consulta E08 y E09 directamente a Node y utiliza SMTP de captura para E10.",
+      "item": [
+        {
+          "name": "E08 · Búsqueda parcial sin distinguir mayúsculas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalUrl}}/api/medicamentos?nombre=AMOX"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Catálogo con los cinco campos y una coincidencia parcial\", () => {",
+                  "    pm.expect(b).to.be.an('array').that.is.not.empty;",
+                  "    b.forEach(medicamento => {",
+                  "      pm.expect(medicamento).to.have.all.keys(\"nombre\", \"principioActivo\", \"presentacion\", \"advertencias\", \"fuente\");",
+                  "      pm.expect(medicamento.nombre).to.be.a('string').and.match(/\\S/);",
+                  "      pm.expect(medicamento.principioActivo).to.be.a('string').and.match(/\\S/);",
+                  "      pm.expect(medicamento.presentacion).to.be.a('string').and.match(/\\S/);",
+                  "      pm.expect(medicamento.advertencias).to.be.a('string').and.match(/\\S/);",
+                  "      pm.expect(medicamento.fuente).to.be.a('string').and.match(/\\S/);",
+                  "      pm.expect(medicamento.nombre.toLowerCase()).to.include('amox');",
+                  "    });",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E08 · Nombre en blanco",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalUrl}}/api/medicamentos?nombre=%20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Error externo específico\", () => {",
+                  "    pm.expect(b.codigo).to.eql(\"CONSULTA_INVALIDA\");",
+                  "    pm.expect(b.mensaje).to.be.a('string').and.match(/\\S/);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E08 · Sin resultados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalUrl}}/api/medicamentos?nombre=no-existe-etapa7"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+                  "if (pm.response.code === 404) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Error externo específico\", () => {",
+                  "    pm.expect(b.codigo).to.eql(\"SIN_RESULTADOS\");",
+                  "    pm.expect(b.mensaje).to.be.a('string').and.match(/\\S/);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E09 · Ubicación de la clínica",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{externalUrl}}/api/ubicacion-clinica"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Cinco campos, coordenadas válidas y mapa coherente\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"nombre\", \"direccion\", \"latitud\", \"longitud\", \"urlMapa\");",
+                  "    pm.expect(b.nombre).to.be.a('string').and.match(/\\S/);",
+                  "    pm.expect(b.direccion).to.be.a('string').and.match(/\\S/);",
+                  "    pm.expect(b.latitud).to.be.a('number').and.within(-90, 90);",
+                  "    pm.expect(b.longitud).to.be.a('number').and.within(-180, 180);",
+                  "    const mapa = /^https?:\\/\\/[^\\s/?#]+[^\\s]*\\?mlat=([^&#]+)&mlon=([^&#]+)#map=\\d+\\/([^/]+)\\/([^/]+)$/.exec(b.urlMapa);",
+                  "    pm.expect(mapa, 'URL de mapa con coordenadas').not.to.eql(null);",
+                  "    pm.expect(mapa.slice(1).map(Number)).to.eql([b.latitud, b.longitud, b.latitud, b.longitud]);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E10 · Rechazar datos inválidos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{externalUrl}}/api/notificaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinatario\": \"correo-invalido\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Etapa7 E10 {{sufijo}}\",\n  \"mensaje\": \"Captura SMTP de la colección Etapa7\",\n  \"reservaId\": {{reservaId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+                  "if (pm.response.code === 400) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Error externo específico\", () => {",
+                  "    pm.expect(b.codigo).to.eql(\"DATOS_INVALIDOS\");",
+                  "    pm.expect(b.mensaje).to.be.a('string').and.match(/\\S/);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E10 · Enviar directamente a Mailpit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{sufijo}}"
+              }
+            ],
+            "url": "{{externalUrl}}/api/notificaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinatario\": \"{{correoDirecto}}\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Etapa7 E10 {{sufijo}}\",\n  \"mensaje\": \"Captura SMTP de la colección Etapa7\",\n  \"reservaId\": {{reservaId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "if (pm.response.code === 202) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Aceptación SMTP y recibo válido\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"idNotificacion\", \"estado\");",
+                  "    pm.expect(b.idNotificacion).to.match(/^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    pm.expect(b.estado).to.eql(\"ACEPTADA\");",
+                  "  });",
+                  "  save('idNotificacion', b.idNotificacion);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E10 · Repetir con la misma clave y datos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{sufijo}}"
+              }
+            ],
+            "url": "{{externalUrl}}/api/notificaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinatario\": \"{{correoDirecto}}\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Etapa7 E10 {{sufijo}}\",\n  \"mensaje\": \"Captura SMTP de la colección Etapa7\",\n  \"reservaId\": {{reservaId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 202', () => pm.response.to.have.status(202));",
+                  "if (pm.response.code === 202) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Devuelve el mismo recibo sin solicitar otro envío\", () => {",
+                  "    pm.expect(b).to.have.all.keys(\"idNotificacion\", \"estado\");",
+                  "    pm.expect(b.idNotificacion).to.match(/^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$/);",
+                  "    pm.expect(b.estado).to.eql(\"ACEPTADA\");",
+                  "    pm.expect(b.idNotificacion).to.eql(v('idNotificacion'));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E10 · Misma clave con contenido diferente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{sufijo}}"
+              }
+            ],
+            "url": "{{externalUrl}}/api/notificaciones",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destinatario\": \"{{correoDirecto}}\",\n  \"canal\": \"EMAIL\",\n  \"asunto\": \"Etapa7 E10 {{sufijo}}\",\n  \"mensaje\": \"Contenido diferente; debe rechazarse\",\n  \"reservaId\": {{reservaId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "  const b = pm.response.json();",
+                  "  const v = key => pm.collectionVariables.get(key);",
+                  "  const save = (key, value) => pm.collectionVariables.set(key, value);",
+                  "  pm.test(\"Error externo específico\", () => {",
+                  "    pm.expect(b.codigo).to.eql(\"CONFLICTO_IDEMPOTENCIA\");",
+                  "    pm.expect(b.mensaje).to.be.a('string').and.match(/\\S/);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
-

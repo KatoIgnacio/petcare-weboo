@@ -1,11 +1,20 @@
 import { solicitar } from './api.js';
 import { seguimientoAviso } from './avisos.js';
+import { medicamentosAtencion } from './medicamentos-atencion.js';
 import { alSalirDelPanel, cerrarPanel, consultarPanel, formulario, mostrarPanel } from './panel.js';
 import { boton, campo, elemento, entrada, errorVisible, esqueleto, estadoReserva, fechaHoraLegible,
   fechaLegible, fechaLocal, ficha, horaLegible, indicador, mensajeVacio, opcion, tabla } from './ui.js';
 import { mostrarHistorial, tratamientos } from './pacientes.js';
 
 const filtros = { fecha: '', veterinarioId: '' };
+const calendarioClinica = new Intl.DateTimeFormat('en', {
+  timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+
+function fechaClinica() {
+  const partes = Object.fromEntries(calendarioClinica.formatToParts(new Date()).map(({ type, value }) => [type, value]));
+  return partes.year + '-' + partes.month + '-' + partes.day;
+}
 
 export function agenda(recargar, actualizando) {
   const nuevo = boton('Nueva reserva', () => editarReserva(recargar), 'button primary add');
@@ -154,28 +163,79 @@ function editarReserva(recargar, reserva = null) {
       }
     }
     cliente.addEventListener('change', cargarMascotas);
-    const fecha = entrada('fechaHora', reserva?.fechaHora.slice(0, 23) ?? '', {
-      type: 'datetime-local', step: 'any', min: fechaLocal() + 'T00:00', required: true,
+    const fecha = entrada('fecha', reserva?.fechaHora.slice(0, 10) ?? '', {
+      type: 'date', min: fechaClinica(), required: true,
     });
-    const fechaInicial = fecha.value;
+    const hora = elemento('select', { name: 'hora', required: true, disabled: true },
+      opcion('', 'Selecciona un veterinario y una fecha'));
+    const avisoHoras = elemento('div', { class: 'field-note', role: 'status' });
+    let solicitudHoras;
+    async function cargarHoras(preferida = '') {
+      solicitudHoras?.abort();
+      const actual = new AbortController();
+      solicitudHoras = actual;
+      hora.disabled = true;
+      guardar.disabled = true;
+      avisoHoras.replaceChildren();
+      if (!veterinario.value || !fecha.value) {
+        hora.replaceChildren(opcion('', 'Selecciona un veterinario y una fecha'));
+        return;
+      }
+      hora.replaceChildren(opcion('', 'Cargando horas disponibles…'));
+      avisoHoras.replaceChildren(indicador('Cargando horas disponibles…'));
+      const params = new URLSearchParams({ fecha: fecha.value });
+      if (reserva) params.set('reservaId', reserva.id);
+      try {
+        const libres = await solicitar('/api/veterinarios/' + veterinario.value + '/disponibilidad?' + params,
+          { signal: actual.signal });
+        if (actual.signal.aborted) return;
+        hora.replaceChildren(opcion('', libres.length ? 'Selecciona una hora' : 'Sin horas disponibles'),
+          ...libres.map(bloque => opcion(bloque, bloque)));
+        if (libres.includes(preferida)) hora.value = preferida;
+        hora.disabled = guardar.disabled = libres.length === 0;
+        avisoHoras.textContent = libres.length ? ''
+          : 'No hay horas disponibles para este veterinario en la fecha elegida.';
+      } catch (error) {
+        if (actual.signal.aborted) return;
+        hora.replaceChildren(opcion('', 'Horas no disponibles'));
+        avisoHoras.replaceChildren('No se pudieron cargar las horas. ' + error.message + ' ',
+          boton('Reintentar', () => cargarHoras(preferida), 'button text-button'));
+      }
+    }
+    veterinario.addEventListener('change', () => cargarHoras());
+    fecha.addEventListener('change', () => cargarHoras());
     const campos = reserva ? [] : [campo('Cliente', cliente), campo('Mascota', mascota), avisoMascotas];
-    campos.push(campo('Veterinario', veterinario), campo('Fecha y hora', fecha));
-    formulario({
+    if (reserva) campos.push(elemento('p', { class: 'field-note' },
+      'Hora actual: ' + fechaHoraLegible(reserva.fechaHora)));
+    campos.push(campo('Veterinario', veterinario), campo('Fecha', fecha), campo('Hora disponible', hora), avisoHoras);
+    const guardar = formulario({
       nombre, campos, guardar: reserva ? 'Guardar cambios' : 'Crear reserva',
       mensajeEnvio: reserva ? 'Guardando el nuevo horario…' : 'Guardando la reserva…',
-      enviar: ({ mascotaId, veterinarioId, fechaHora }) => {
+      enviar: async ({ mascotaId, veterinarioId, fecha, hora }) => {
         if (!reserva && !mascotaId) throw new Error('Selecciona una mascota activa para continuar.');
-        if (!fechaHora || new Date(fechaHora) <= new Date()) throw new Error('Selecciona una fecha y hora futura.');
-        // El control del navegador admite milisegundos. Conserva la precisión original al cambiar solo el veterinario.
-        const horaGuardada = reserva && fechaHora === fechaInicial ? reserva.fechaHora : fechaHora;
-        const datos = { veterinarioId: Number(veterinarioId), fechaHora: horaGuardada };
+        if (!fecha || !hora) throw new Error('Selecciona una fecha y una hora disponible.');
+        const datos = { veterinarioId: Number(veterinarioId), fechaHora: fecha + 'T' + hora };
         if (!reserva) datos.mascotaId = Number(mascotaId);
-        return solicitar(reserva ? '/api/reservas/' + reserva.id : '/api/reservas',
-          { metodo: reserva ? 'PUT' : 'POST', datos });
+        try {
+          return await solicitar(reserva ? '/api/reservas/' + reserva.id : '/api/reservas',
+            { metodo: reserva ? 'PUT' : 'POST', datos });
+        } catch (error) {
+          if (error.status === 409) void cargarHoras(hora);
+          throw error;
+        }
       },
-      terminado: recargar,
+      terminado: resultado => {
+        recargar();
+        if (resultado.resultadoNotificacion?.startsWith('PENDIENTE:')) mostrarDetalleReserva(resultado, recargar);
+      },
       aviso: reserva ? 'Reserva reprogramada.' : 'Reserva creada.',
     });
+    alSalirDelPanel(() => {
+      solicitudHoras?.abort();
+      consulta++;
+    });
+    const actual = reserva?.fechaHora.split('T')[1] ?? '';
+    void cargarHoras(/^\d{2}:\d{2}(?::00(?:\.0+)?)?$/.test(actual) ? actual.slice(0, 5) : '');
   }, reserva ? 'Consultando los veterinarios disponibles…' : 'Cargando clientes y veterinarios…');
 }
 
@@ -242,6 +302,8 @@ function cambiarEstado(reserva, estado, recargar) {
 }
 
 function registrarAtencion(reserva, recargar) {
+  const consulta = new AbortController();
+  const medicamentos = medicamentosAtencion(consulta.signal);
   const area = (nombre, maximo, obligatorio = false) =>
     elemento('textarea', { name: nombre, maxlength: maximo, required: obligatorio, rows: 3 });
   formulario({
@@ -249,16 +311,12 @@ function registrarAtencion(reserva, recargar) {
     campos: [
       campo('Diagnóstico', area('diagnostico', 1000, true)),
       campo('Tratamiento', area('tratamiento', 1000, true)),
-      campo('Medicamentos (uno por línea)', area('medicamentos')),
+      medicamentos.nodo,
       campo('Observaciones', area('observaciones', 1500)),
     ],
-    enviar: ({ diagnostico, tratamiento, medicamentos, observaciones }) => {
-      const lista = medicamentos.split(/\r?\n/).map(valor => valor.trim()).filter(Boolean);
-      if (lista.some(medicamento => medicamento.length > 120)) {
-        throw new Error('Cada medicamento puede tener hasta 120 caracteres.');
-      }
+    enviar: ({ diagnostico, tratamiento, observaciones }) => {
       return solicitar('/api/reservas/' + reserva.id + '/atencion', { metodo: 'POST',
-        datos: { diagnostico, tratamiento, medicamentos: lista, observaciones: observaciones || null } });
+        datos: { diagnostico, tratamiento, medicamentos: medicamentos.valores(), observaciones: observaciones || null } });
     },
     terminado: () => {
       recargar();
@@ -266,4 +324,5 @@ function registrarAtencion(reserva, recargar) {
     },
     aviso: 'Atención registrada.',
   });
+  alSalirDelPanel(() => consulta.abort());
 }

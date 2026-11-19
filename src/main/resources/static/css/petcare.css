@@ -345,7 +345,7 @@ textarea { resize: vertical; }
   overflow-wrap: anywhere;
 }
 .alert ul { margin: 6px 0 0; padding-left: 20px; }
-.surface > .alert { margin-inline: 23px; }
+.surface > .alert, .external-surface > div > .alert { margin-inline: 23px; }
 .alert .button { margin-top: 6px; }
 .toast {
   position: fixed;
@@ -416,13 +416,36 @@ dialog::backdrop { background: var(--overlay); }
 .treatment h4 { margin-bottom: 9px; font-size: 14px; }
 
 .external-surface { max-width: 840px; }
-.external-search { display: flex; align-items: end; gap: 10px; padding: 22px; }
-.external-search .field { flex: 1; }
+.external-search { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 22px; }
+.external-search .field { flex: 1 1 200px; }
 .external-results { display: grid; gap: 12px; padding: 18px 22px 22px; }
 .external-list .external-results { padding-top: 0; }
 .external-card { padding: 17px; border: 1px solid var(--border); border-radius: 12px; background: var(--tint); }
-.external-card h2, .external-card h3 { font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
+.external-card h2, .external-card h3, .external-card h4 { font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
 .external-card .details { margin-top: 12px; }
+.medicamento-resumen { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.medicamento-resumen h3 { min-width: 0; }
+.medicamento-resumen .button { flex-shrink: 0; }
+.atencion-med {
+  display: grid; gap: 10px; min-width: 0; padding: 13px;
+  border: 1px solid var(--border); border-radius: 12px;
+}
+.atencion-med h3 { font-size: 16px; }
+.atencion-med-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.atencion-med-lista { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.atencion-med-lista li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px 4px 12px; border-radius: 8px; background: var(--tint);
+}
+.atencion-med-lista span { min-width: 0; overflow-wrap: anywhere; }
+.atencion-med-manual { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.atencion-med-manual .field { flex: 1 1 190px; }
+.atencion-med-catalogo { display: grid; gap: 8px; min-width: 0; }
+.atencion-med-catalogo > div:empty { display: none; }
+.atencion-med-selector { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.atencion-med-selector .field { flex: 1 1 190px; }
+.atencion-med .section-feedback { padding: 0; }
+.atencion-med .alert { margin-bottom: 0; }
 .clinic-card .button { margin-top: 17px; }
 .clinic-demo { font-size: 13px; color: var(--muted); margin-top: 4px; }
 .reservation-summary { display: grid; gap: 12px; }

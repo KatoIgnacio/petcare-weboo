@@ -1,290 +1,217 @@
-# PetCare
+# PetCare | Gestión veterinaria
 
-Avance de desarrollo del sistema de gestión de atención veterinaria para la asignatura Programación Web Orientada a Objetos.
+**Universidad del Bío-Bío · Desarrollo Web Orientado a Objeto · Estudio de Caso 2**
 
-## Estado del avance
+**Integrantes:** Kato Bello Martínez y Jaime Palavecino Suárez.
 
-- Backend Spring Boot 4.1.1 con Java 21.
-- Arquitectura `Controller -> Service -> Repository`.
-- Modelo relacional para clientes, mascotas, veterinarios, reservas y atenciones médicas.
-- PostgreSQL mediante Docker Compose.
-- Validación de datos y manejo uniforme de errores HTTP.
-- Prevención de reservas duplicadas para el veterinario o la mascota.
-- Estados `PENDIENTE`, `CONFIRMADA`, `CANCELADA` y `ATENDIDA`.
-- Servicio Node para medicamentos, ubicación configurable y envío SMTP de notificaciones, en el repositorio hermano `petcare-external-api`.
-- Avisos persistidos en PostgreSQL, enviados después del commit y recuperados con reintentos limitados.
-- Pruebas automatizadas del flujo principal.
-- Flujo integrado verificado con PostgreSQL 17 y la API externa en ejecución.
-- Listado de clientes activos, agenda filtrada e historial por mascota, incluida la consulta después de una baja lógica.
-- Frontend en HTML, CSS y JavaScript servido desde Spring Boot para gestionar clientes, mascotas, veterinarios, reservas y atenciones.
+PetCare centraliza las fichas de clientes y mascotas, la agenda veterinaria y el historial de atención. El sistema se despliega en **dos computadores conectados por la red local**: el primero ejecuta la aplicación web en **Java 21, Spring Boot y PostgreSQL**; el segundo ejecuta la **API Node.js** de medicamentos, ubicación y notificaciones, junto con **Mailpit**.
 
-## Puertos
+[Funcionalidades](#funcionalidades) · [Arquitectura](#arquitectura) · [Despliegue](#despliegue-en-dos-computadores) · [Endpoints](#endpoints) · [Verificación](#verificación-del-sistema) · [Pruebas](#pruebas)
 
-| Componente | Puerto |
-|---|---:|
-| Backend Spring Boot | 8082 |
-| API externa Node | 3001 |
-| PostgreSQL | 5433 |
-| SMTP local Mailpit | 1025 |
-| Mensajes capturados Mailpit | 8025 |
+## Funcionalidades
 
-## Estructura principal
+| Módulo | Qué permite hacer |
+| --- | --- |
+| Clientes y mascotas | Registrar, consultar, editar y dar de baja fichas. La baja lógica conserva el historial. |
+| Veterinarios y agenda | Registrar y listar profesionales. Filtrar reservas por fecha y veterinario. |
+| Reservas | Crear y reprogramar con un selector de horas libres por veterinario y fecha. Confirmar y cancelar. Spring impide solapamientos de reservas activas para la misma mascota o el mismo veterinario. |
+| Atención e historial | Registrar diagnóstico, tratamiento y medicamentos. En **Registrar atención**, usa **Elegir del catálogo** para desplegar los medicamentos, revisar una ficha y añadir el nombre. **Agregar manualmente** funciona incluso si la API externa no responde. Al guardar, la reserva confirmada pasa a `ATENDIDA`. |
+| Servicios externos | Buscar medicamentos, consultar la ubicación de la clínica y enviar avisos al confirmar, cancelar o reprogramar una reserva confirmada. El catálogo y la ubicación inicial son de demostración. |
 
-```text
-WebOO/
-|- petcare-weboo/
-|  |- src/main/java/cl/bello/petcare/
-|  |  |- controller/
-|  |  |- service/
-|  |  |- repository/
-|  |  |- entity/
-|  |  |- dto/
-|  |  |- exception/
-|  |  `- config/
-|  |- src/main/resources/
-|  |  |- static/
-|  |  |- schema.sql
-|  |  |- data.sql
-|  |  `- application.properties
-|  |- docs/
-|  |- postman/
-|  `- compose.yaml
-`- petcare-external-api/
-   |- server.js
-   |- package.json
-   `- README.md
+## Arquitectura
+
+```mermaid
+flowchart LR
+    subgraph PC1["Equipo 1 · Aplicación principal"]
+        UI["Navegador · HTML, CSS y JavaScript"]
+        Spring["Spring Boot · 8082"]
+        DB[("PostgreSQL · 5433")]
+    end
+    subgraph PC2["Equipo 2 · Servicios externos"]
+        Node["Node.js · 3001"]
+        Mail["Mailpit · SMTP 1025 / Bandeja 8025"]
+    end
+    UI -->|"Gestión y agenda · HTTP"| Spring
+    Spring -->|"Datos y eventos de aviso"| DB
+    UI -->|"E08 y E09 · HTTP"| Node
+    Spring -->|"E10 · HTTP"| Node
+    Node -->|"Correo · SMTP"| Mail
 ```
 
-## Ejecución
+Spring sirve el frontend en HTML, CSS y JavaScript y publica la dirección del segundo equipo en `GET /api/configuracion`. Desde el equipo 1, el navegador consulta E08 y E09 directamente en Node y Spring llama a E10. Node y la configuración de Mailpit se mantienen en el [repositorio de la API externa](https://github.com/JaimePalavecino/petcare-external-api).
 
-Se requiere Java 21, Node.js 20 o posterior y Docker Desktop. Los comandos de PostgreSQL y Spring se ejecutan desde la raíz de `petcare-weboo`. El repositorio `petcare-external-api` debe estar en la carpeta hermana indicada en la estructura.
+### Estructura del repositorio
 
-### 1. Iniciar Docker Desktop
+```text
+petcare-weboo/
+├── src/
+│   ├── main/
+│   │   ├── java/cl/bello/petcare/
+│   │   │   ├── controller/           # Entrada HTTP
+│   │   │   ├── service/              # Reglas de negocio e integración
+│   │   │   ├── repository/           # Acceso a datos con JPA
+│   │   │   ├── entity/              # Entidades de base de datos
+│   │   │   ├── dto/                 # Datos de entrada y respuesta
+│   │   │   ├── config/              # Configuración de Spring
+│   │   │   └── exception/           # Excepciones de negocio
+│   │   └── resources/
+│   │       ├── static/               # index.html, CSS, JS e imágenes
+│   │       ├── schema.sql            # Tablas y restricciones
+│   │       ├── data.sql              # Veterinaria inicial
+│   │       └── application.properties
+│   └── test/                         # Pruebas de Spring con H2
+├── database/                         # Scripts SQL opcionales
+├── postman/                          # Colección y entorno
+├── compose.yaml                      # PostgreSQL 17
+└── build.gradle                      # Compilación y dependencias
+```
 
-Esperar hasta que el motor de Docker aparezca activo.
+## Despliegue en dos computadores
 
-### 2. Iniciar PostgreSQL
+| Equipo | Requisitos | Servicios |
+| --- | --- | --- |
+| **1 · `petcare-weboo`** | JDK 21 y Docker con Compose. Gradle Wrapper incluido. | Spring y frontend (`8082`), PostgreSQL (`5433`). |
+| **2 · `petcare-external-api`** | Node.js 20.6 o posterior, npm y Docker con Compose. | API HTTP (`3001`), SMTP de Mailpit (`1025`) y bandeja de Mailpit (`8025`). |
+
+Conecta ambos equipos a la misma red local. El equipo 1 debe poder acceder al puerto `3001` del equipo 2. PostgreSQL se usa en el equipo 1 y los puertos de Mailpit quedan en el equipo 2.
+
+### 1. Equipo 2: iniciar Node y Mailpit
+
+Sigue las [instrucciones de instalación de la API externa](https://github.com/JaimePalavecino/petcare-external-api#instalación-en-el-equipo-2). Anota la IPv4 del equipo 2 para configurar Spring. La [bandeja de Mailpit](http://127.0.0.1:8025/) se abre desde ese equipo.
+
+### 2. Equipo 1: iniciar PostgreSQL
+
+Con Docker activo, ejecuta desde la raíz de `petcare-weboo` en PowerShell:
 
 ```powershell
 docker compose up -d postgres
 docker compose ps
 ```
 
-El contenedor `petcare-postgres` debe aparecer como `healthy`.
+Espera a que `petcare-postgres` aparezca como `healthy`. Spring ejecuta `schema.sql` y `data.sql` al iniciar.
 
-### 3. Iniciar la API externa
+### 3. Equipo 1: conectar Spring con la API externa
 
-En una segunda terminal, comenzando desde la raíz de `petcare-weboo`, ejecutar
-
-```powershell
-Set-Location ..\petcare-external-api
-npm.cmd ci
-docker compose up -d mailpit
-$env:HOST = '127.0.0.1'
-$env:PORT = '3001'
-$env:SMTP_HOST = '127.0.0.1'
-$env:SMTP_PORT = '1025'
-$env:SMTP_SECURE = 'false'
-$env:SMTP_REQUIRE_TLS = 'false'
-$env:SMTP_FROM = 'avisos@petcare.example.invalid'
-npm.cmd start
-```
-
-Se debe mostrar `PetCare external API disponible`.
-
-### 4. Iniciar Spring Boot
-
-En una tercera terminal, desde la raíz de `petcare-weboo`, seleccionar el JDK 21 instalado y ejecutar. La ruta siguiente corresponde al equipo de desarrollo y debe ajustarse si la instalación de Java está en otra ubicación.
+Configura `JAVA_HOME` con la ruta de tu JDK 21. Sustituye `192.168.1.25` por la IPv4 real del equipo 2. Si la consulta de ubicación devuelve los datos de la clínica, inicia Spring en esa misma terminal:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.12.1'
-$env:EXTERNAL_API_URL = 'http://localhost:3001'
-.\gradlew.bat bootRun
+$env:EXTERNAL_API_URL = 'http://192.168.1.25:3001'
+Invoke-RestMethod "$env:EXTERNAL_API_URL/api/ubicacion-clinica"
+.\gradlew.bat bootJar
+& "$env:JAVA_HOME\bin\java.exe" '-Duser.timezone=America/Santiago' -jar build/libs/petcare-0.0.1-SNAPSHOT.jar
 ```
 
-Abre [PetCare](http://localhost:8082/) para entrar a la agenda clínica. Spring Boot sirve el frontend y atiende las operaciones de gestión y la consulta de avisos.
+Desde el equipo 1, abre **[PetCare](http://127.0.0.1:8082/)**. El frontend se sirve junto con la API y no requiere una compilación aparte. **Medicamentos** abre con el catálogo completo en orden alfabético y permite buscar por nombre completo o parcial (E08). Borra el término o pulsa **Mostrar todos** para recuperar el listado. La vista inicial y el desplegable de la atención se cargan con `GET /api/medicamentos/catalogo`.
 
-### Configuración de la API externa
+<details>
+<summary>Configuración de Spring y base separada para pruebas</summary>
 
-`EXTERNAL_API_URL` define la URL base de Node. Su valor predeterminado es `http://localhost:3001`. El frontend obtiene la misma base de `GET /api/configuracion`, que devuelve únicamente `externalApiUrl`. El navegador consulta medicamentos y ubicación en Node y Spring solicita el envío de avisos al mismo servicio.
+| Variable | Configuración local |
+| --- | --- |
+| `SERVER_PORT` | `8082` |
+| `DB_URL` | `jdbc:postgresql://localhost:5433/petcare` |
+| `DB_USER` / `DB_PASSWORD` | `postgres` / `postgres` para el Compose local |
+| `EXTERNAL_API_URL` | `http://IP_DEL_EQUIPO_2:3001` en el despliegue. El valor predeterminado `http://localhost:3001` sirve para pruebas en un solo equipo. |
+| `NOTIFICATION_MAX_ATTEMPTS` / `NOTIFICATION_RETRY_DELAY` | `5` intentos y `30s` de espera inicial |
 
-Asigna la variable antes de iniciar Spring. Para la demostración en red, usa la IP del computador que ejecuta Node, por ejemplo `http://192.168.1.25:3001`. Node debe escuchar en una interfaz alcanzable desde el otro equipo, por ejemplo con `HOST=0.0.0.0` en la red de demostración. Tanto el navegador de PetCare como Spring deben poder conectar con esa dirección.
+Las opciones completas están en [application.properties](src/main/resources/application.properties).
 
-Las variables se asignan en la terminal que inicia cada proceso. Spring lee `DB_URL`, `DB_USER`, `DB_PASSWORD`, `SERVER_PORT`, `EXTERNAL_API_URL` y `CORS_ALLOWED_ORIGINS` según `application.properties`. Node lee `process.env`, incluidos sus parámetros SMTP y de clínica. Su README documenta también la carga explícita de `.env` mediante `node --env-file=.env server.js`, disponible desde Node 20.6.
-
-Para repetir verificaciones sobre la base separada del diagnóstico, asignar también la siguiente variable en la terminal de Spring antes de iniciar la aplicación.
+Para no mezclar datos de Postman con los de la demostración, crea una base de prueba una sola vez. Define `DB_URL` en la terminal de Spring antes de arrancarlo:
 
 ```powershell
-$env:DB_URL = 'jdbc:postgresql://localhost:5433/petcare_diagnostico_20261117'
+docker exec petcare-postgres createdb -U postgres petcare_pruebas
+$env:DB_URL = 'jdbc:postgresql://localhost:5433/petcare_pruebas'
 ```
 
-### Probar el frontend con una base separada
-
-Desde la raíz de `petcare-weboo`, con PostgreSQL activo, prepara una base de prueba la primera vez. En este equipo la etapa 5 ya creó `petcare_etapa5_20261117`. Elige otro nombre si quieres preparar un conjunto nuevo.
+Si quieres datos de ejemplo, carga [demo-data.sql](database/demo-data.sql) después del primer inicio de Spring sobre esa base. Las citas del script tienen fechas fijas; crea una cita futura para ensayar altas y reprogramaciones.
 
 ```powershell
-docker exec petcare-postgres createdb -U postgres petcare_etapa5_pruebas
+Get-Content -Raw -Encoding UTF8 database/demo-data.sql | docker exec -i petcare-postgres psql -U postgres -d petcare_pruebas -v ON_ERROR_STOP=1
 ```
 
-En la terminal de Spring, selecciona Java 21 y la base creada antes de usar `bootRun`.
+</details>
 
-```powershell
-$env:DB_URL = 'jdbc:postgresql://localhost:5433/petcare_etapa5_pruebas'
-.\gradlew.bat bootRun
-```
+## Endpoints
 
-En [PetCare](http://localhost:8082/), entra a **Clientes y mascotas**, registra un cliente y agrega una mascota. Crea o elige un veterinario y usa **Nueva reserva** en **Agenda**. Abre el detalle para reprogramar, confirmar, cancelar o registrar atención según el estado. El historial se puede abrir desde la mascota o desde el detalle de una reserva, incluso después de una baja lógica.
+Las rutas **E01–E07** pertenecen a Spring (puerto `8082`); **E08–E10** pertenecen a Node (puerto `3001`).
 
-### Probar la integración con Node y Mailpit
+| ID | Método | Ruta | Resultado |
+| --- | --- | --- | --- |
+| E01 | `POST` | `/api/clientes` | `201` · Registra un cliente. |
+| E02 | `POST` | `/api/clientes/{clienteId}/mascotas` | `201` · Registra una mascota para ese cliente. |
+| E03 | `GET` | `/api/clientes/{clienteId}/mascotas` | `200` · Lista sus mascotas activas. |
+| E04 | `POST` | `/api/reservas` | `201` · Crea una reserva en estado `PENDIENTE`. |
+| E05 | `PUT` | `/api/reservas/{id}` | `200` · Reprograma el horario o cambia el veterinario. Devuelve el aviso pendiente si la reserva ya estaba confirmada. |
+| E06 | `PATCH` | `/api/reservas/{id}/estado` | `200` · Cambia el estado y devuelve el resultado inicial del aviso. |
+| E07 | `POST` | `/api/reservas/{id}/atencion` | `201` · Registra una atención. |
+| E08 | `GET` | `/api/medicamentos?nombre=AMOX` | `200` · Devuelve coincidencias por nombre. |
+| E09 | `GET` | `/api/ubicacion-clinica` | `200` · Devuelve dirección, coordenadas y enlace al mapa. |
+| E10 | `POST` | `/api/notificaciones` | `202` · Devuelve un recibo cuando SMTP acepta el correo. |
 
-1. Inicia Node y Mailpit con la configuración de desarrollo de arriba.
-2. En **Medicamentos**, busca `amox` para ver el registro de ejemplo. En **Clínica**, revisa la dirección y la acción **Abrir mapa**. Para mostrar el origen de las respuestas, abre la pestaña **Red** de las herramientas del navegador y observa el puerto de las solicitudes a medicamentos y ubicación.
-3. Confirma o cancela una reserva de prueba y observa su aviso en el detalle. La consulta se actualiza mientras el detalle está abierto y el aviso está en curso. Usa **Actualizar detalle** si quieres volver a comprobarlo manualmente.
-4. Busca el aviso capturado en [Mailpit](http://localhost:8025/).
+<details>
+<summary>Rutas auxiliares de Spring y validación</summary>
 
-En el entorno de demostración, usa `CLINIC_NAME`, `CLINIC_ADDRESS`, `CLINIC_LATITUDE` y `CLINIC_LONGITUDE` en Node para configurar los datos reales. Las ubicaciones y medicamentos de ejemplo se identifican en la interfaz. [Informe de la etapa 6](docs/integracion-frontend-etapa6.md)
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| `GET` | `/api/configuracion` | Devuelve `externalApiUrl`. |
+| `GET` | `/api/clientes` | Lista clientes activos. |
+| `GET`, `PUT`, `DELETE` | `/api/clientes/{id}` | Consulta, edición y baja lógica. |
+| `GET`, `PUT`, `DELETE` | `/api/mascotas/{id}` | Consulta, edición y baja lógica. |
+| `GET` | `/api/mascotas/{id}/historial` | Lista atenciones aunque la mascota esté dada de baja. |
+| `GET`, `POST` | `/api/veterinarios` | Lista o registra profesionales. |
+| `GET` | `/api/veterinarios/{id}/disponibilidad?fecha=YYYY-MM-DD` | Lista ordenada de horas libres en formato `HH:mm`, o `[]` si no quedan bloques futuros. |
+| `GET` | `/api/reservas` | Agenda. Admite `fecha=YYYY-MM-DD` y `veterinarioId` como filtros combinables. |
+| `GET` | `/api/reservas/{id}` | Detalle, atención y resultado del último aviso. |
 
-## Endpoints del reporte
+`fechaHora` se envía en ISO local sin zona, por ejemplo `2026-11-27T10:30:00`; debe ser futura al crear o reprogramar. Las bajas devuelven `204`. Spring usa `ApiError` para informar el estado, mensaje, ruta y detalles del error. Los casos más comunes son `400` por datos inválidos, `404` por recurso inexistente y `409` por conflicto.
 
-| ID | Método | URL |
-|---|---|---|
-| E01 | POST | `/api/clientes` |
-| E02 | POST | `/api/clientes/{clienteId}/mascotas` |
-| E03 | GET | `/api/clientes/{clienteId}/mascotas` |
-| E04 | POST | `/api/reservas` |
-| E05 | PUT | `/api/reservas/{id}` |
-| E06 | PATCH | `/api/reservas/{id}/estado` |
-| E07 | POST | `/api/reservas/{id}/atencion` |
-| E08 | GET | `http://localhost:3001/api/medicamentos?nombre={nombre}` |
-| E09 | GET | `http://localhost:3001/api/ubicacion-clinica` |
-| E10 | POST | `http://localhost:3001/api/notificaciones` |
+</details>
 
-También se implementaron rutas auxiliares para consultar, actualizar y desactivar clientes y mascotas, crear veterinarios y consultar una reserva.
+### Horario y disponibilidad
 
-## Consultas para el frontend
+La clínica atiende de **08:30 a 19:00**, hora de **America/Santiago**. Cada reserva ocupa 30 minutos; el último inicio es a las **18:30**. Al elegir fecha y veterinario, los formularios de alta y reprogramación muestran sus bloques libres. Las reservas pendientes y confirmadas ocupan el horario. Las citas anteriores que no coinciden con los nuevos bloques se conservan y bloquean los tramos que se solapan. Al cancelar, se liberan los tramos que siguen siendo futuros.
 
-| Método y ruta | Parámetros | Respuesta 200 |
-|---|---|---|
-| `GET /api/configuracion` | Configuración pública del servicio externo | Objeto con `externalApiUrl` |
-| `GET /api/clientes` | Consulta completa de clientes activos | Arreglo de ClienteResponse, ordenado por nombre e id ascendentes |
-| `GET /api/reservas` | `fecha` y `veterinarioId` opcionales | Arreglo de ReservaAgendaResponse, ordenado por fechaHora e id ascendentes |
-| `GET /api/mascotas/{id}/historial` | Identificador de mascota en la ruta | Arreglo de AtencionResponse, ordenado por fecha e id descendentes |
+La consulta auxiliar de disponibilidad admite `reservaId` para reprogramar. Debe identificar una reserva pendiente o confirmada; solo se excluye si pertenece al veterinario consultado. Devuelve `400` si la fecha o los identificadores no son válidos, `404` si no encuentra un veterinario activo o la reserva indicada y `409` si esa reserva ya no se puede reprogramar. Al guardar, Spring comprueba nuevamente el bloque y los solapamientos del veterinario y de la mascota. Si el cupo se ocupó, el formulario muestra el conflicto y actualiza las horas sin borrar los otros datos.
 
-Los listados devuelven `[]` cuando la consulta válida carece de resultados. Un historial de mascota inexistente devuelve 404. El historial admite mascotas dadas de baja y la agenda conserva las referencias históricas de clientes, mascotas y profesionales.
+### Avisos de reservas
 
-La agenda devuelve `id`, `mascotaId`, `mascotaNombre`, `clienteId`, `clienteNombre`, `veterinarioId`, `veterinarioNombre`, `fechaHora` y `estado`.
+Spring guarda la confirmación, cancelación o reprogramación y su aviso en la misma transacción de PostgreSQL. E06 y, cuando genera un aviso, E05 devuelven `PENDIENTE:<claveEvento>`; después, un proceso en segundo plano llama a E10. Si Node no está disponible, la reserva mantiene el cambio y el aviso puede reintentarse con la misma clave.
 
-`fecha` requiere una fecha válida `YYYY-MM-DD` y selecciona desde las 00:00 de ese día hasta antes de las 00:00 del día siguiente. `veterinarioId` requiere un entero positivo. Ambos filtros se aplican conjuntamente cuando se proporcionan. Las consultas aceptan fechas pasadas y futuras. Un identificador de veterinario válido sin coincidencias produce `[]`. Los filtros vacíos o inválidos producen 400.
+Al cambiar la hora o el veterinario de una reserva **confirmada**, se envía un correo «Reserva reprogramada» con los horarios anterior y nuevo, y los nombres de ambos profesionales si cambió el veterinario. Reprogramar una reserva pendiente o guardar los mismos datos devuelve `NO_APLICA` y no genera correo.
 
-Con Spring iniciado, ejecutar desde PowerShell
+El detalle de la reserva consulta el resultado persistido. `ACEPTADA:<idNotificacion>` significa que Mailpit recibió el correo por SMTP y Node registró el recibo. En esta configuración el mensaje queda en la bandeja de pruebas.
 
-```powershell
-Invoke-RestMethod 'http://localhost:8082/api/clientes'
-Invoke-RestMethod 'http://localhost:8082/api/reservas?fecha=2026-11-17'
-Invoke-RestMethod 'http://localhost:8082/api/reservas?fecha=2026-11-17&veterinarioId=1'
-Invoke-RestMethod 'http://localhost:8082/api/mascotas/1/historial'
-```
+## Verificación del sistema
 
-El último ejemplo utiliza la mascota 1. Para otros conjuntos de datos, utilizar el id obtenido al registrar o consultar la mascota.
-
-### Fechas y errores HTTP
-
-`fechaHora` se intercambia como hora local ISO sin zona, por ejemplo `2026-11-27T10:30:00`, y se almacena como TIMESTAMP mediante LocalDateTime. El equipo de desarrollo utiliza America/Santiago. La zona de la JVM debe corresponder a la hora local de la clínica. El frontend y otros consumidores deben enviar esa misma hora local.
-
-Las reservas nuevas y sus modificaciones requieren fecha futura. La consulta de agenda permite recuperar registros históricos. El tratamiento UTC de la colección Postman está registrado como pendiente en el diagnóstico inicial.
-
-Los errores usan ApiError con `timestamp`, `status`, `error`, `mensaje`, `ruta` y `detalles`. Se comprobaron 400 por datos o parámetros inválidos, 404 por recurso inexistente, 405 por método incompatible, 409 por conflicto y 415 por tipo de contenido incompatible. La respuesta 405 conserva la cabecera Allow. Los fallos internos inesperados reciben 500 con mensaje genérico.
-
-## Notificaciones persistentes de la etapa 4
-
-Confirmar o cancelar una reserva guarda un registro en `notificaciones_pendientes` dentro de la misma transacción. El trabajador periódico procesa los registros confirmados y realiza HTTP fuera de la transacción. La restricción única sobre reserva y estado coordina la creación de eventos. Los bloqueos breves, la concesión temporal y el token de intento coordinan trabajadores. Los tiempos operativos se guardan en UTC con TIMESTAMP WITH TIME ZONE. `fechaHora` conserva su interpretación local.
-
-E06 conserva sus campos y devuelve inicialmente `resultadoNotificacion=PENDIENTE:<claveEvento>`. `GET /api/reservas/{id}` permite consultar el resultado persistido del último evento.
-
-| Resultado | Significado |
-|---|---|
-| NO_APLICA | Operación sin evento nuevo, incluida la repetición del estado actual. Una reserva anterior sin eventos también devuelve este valor al consultarla |
-| PENDIENTE:UUID | Evento confirmado, listo para su primer intento |
-| EN_PROCESO:UUID | Trabajador con un intento en curso |
-| PENDIENTE_REINTENTO:UUID | Fallo temporal y siguiente intento registrado |
-| ACEPTADA:UUID | SMTP aceptó el mensaje y Node guardó el recibo. El UUID corresponde a idNotificacion |
-| FALLIDA:UUID | Fallo definitivo o agotamiento de intentos con resultado conocido |
-| INCIERTA:UUID | Resultado pendiente de revisión, con repetición automática detenida |
-
-Los estados previos a ACEPTADA y los finales FALLIDA e INCIERTA incluyen la clave del evento. Una caída de Node o SMTP conserva el estado de la reserva y el aviso. Confirmación y cancelación tienen claves distintas. Repetir la transición actual devuelve NO_APLICA y conserva el evento existente.
-
-El trabajador se activa al iniciar Spring y recupera pendientes de PostgreSQL. Cada intento reclama brevemente el aviso y libera la transacción antes de esperar la red. La misma clave se transmite a Node mediante `Idempotency-Key`. Los casos inciertos y los fallos definitivos requieren revisar el registro y la evidencia SMTP antes de decidir otro envío. Los cambios de estado anteriores a esta etapa conservan su historial existente.
-
-| Variable Spring | Predeterminado | Uso |
-|---|---|---|
-| EXTERNAL_API_CONNECT_TIMEOUT | 2s | Espera de conexión HTTP |
-| EXTERNAL_API_READ_TIMEOUT | 10s | Espera de respuesta HTTP |
-| NOTIFICATION_MAX_ATTEMPTS | 5 | Máximo de intentos por evento |
-| NOTIFICATION_RETRY_DELAY | 30s | Primera espera entre intentos |
-| NOTIFICATION_MAX_RETRY_DELAY | 5m | Tope de la espera exponencial |
-| NOTIFICATION_LEASE_DURATION | 30s | Concesión de un intento antes de su recuperación |
-| NOTIFICATION_BATCH_SIZE | 10 | Máximo de avisos considerados en cada ciclo |
-| NOTIFICATION_WORKER_ENABLED | true | Activa el trabajador periódico |
-| NOTIFICATION_WORKER_DELAY_MS | 5000 | Intervalo entre ciclos, en ms |
-| NOTIFICATION_WORKER_INITIAL_DELAY_MS | 5000 | Espera inicial, en ms |
-
-La política predeterminada permite cinco intentos totales, con esperas de 30, 60, 120 y 240 segundos entre fallos temporales. SMTP tiene sus propios tiempos de espera documentados en el repositorio externo. Configurar la concesión teniendo en cuenta la duración máxima prevista del intento HTTP. Una concesión vencida permite recuperar un proceso interrumpido usando la misma clave. Un último intento interrumpido queda INCIERTA para revisión.
-
-Para inspeccionar estados, errores y próximas ejecuciones en la base utilizada
-
-```powershell
-docker exec petcare-postgres psql -U postgres -d petcare_diagnostico_20261117 -c 'SELECT reserva_id, estado_reserva, estado, intentos, proximo_intento, ultimo_error FROM notificaciones_pendientes ORDER BY id;'
-```
-
-Los mensajes SMTP de desarrollo se revisan en [Mailpit local](http://localhost:8025). Allí se comprueban remitente, destinatario, asunto y cuerpo. La etapa 4 verificó aceptación y captura local. La entrega a una casilla externa requiere configuración del proveedor y un destinatario autorizado. Los contratos E08–E10 y la configuración completa están en el README del repositorio externo.
-
-## Base de datos
-
-`schema.sql` crea las tablas y restricciones. `data.sql` agrega un veterinario demostrativo:
-
-- Email: `paula.rojas@petcare.cl`
-- Especialidad: Medicina general
-
-La eliminación de clientes y mascotas es lógica para conservar el historial.
-
-### Datos de demostración ampliados
-
-El archivo `database/demo-data.sql` agrega clientes, mascotas, veterinarios,
-reservas en distintos estados, atenciones y medicamentos. Es idempotente: se
-puede ejecutar nuevamente sin duplicar el conjunto de demostración.
-
-```powershell
-docker cp database/demo-data.sql petcare-postgres:/tmp/demo-data.sql
-docker exec petcare-postgres psql -U postgres -d petcare -f /tmp/demo-data.sql
-```
+1. **Gestión clínica:** registra y edita un cliente y su mascota, y comprueba la baja lógica con una ficha de prueba. Crea una reserva futura y comprueba que su bloque desaparece para ese veterinario. Verifica el rechazo de un duplicado con Postman o con dos formularios abiertos antes de guardar. Reprograma la reserva y comprueba el nuevo horario.
+2. **Estados y persistencia:** confirma la reserva y registra una atención. Recarga el historial y coteja los identificadores de la reserva y la atención en PostgreSQL. Cancela otra reserva y verifica su estado.
+3. **Medicamentos y ubicación:** comprueba que [la configuración pública](http://127.0.0.1:8082/api/configuracion) devuelva la IP del equipo 2 en `externalApiUrl`. En la pestaña **Red** del navegador, verifica que **Medicamentos (E08)** y **Clínica (E09)** consulten esa IP.
+4. **Notificaciones:** revisa en Mailpit, desde el equipo 2, los correos de confirmación y cancelación. Para verificar la reprogramación, cambia el horario de una reserva ya confirmada antes de registrar su atención y revisa las dos horas en el nuevo correo. Spring invoca E10 desde el servidor, así que esa llamada no aparece en la pestaña **Red** del navegador.
 
 ## Pruebas
 
+| Prueba | Cómo ejecutarla |
+| --- | --- |
+| Spring | `.\gradlew.bat check bootJar`. Las pruebas usan H2 y cubren validación, reservas y avisos persistentes. |
+| Node | `npm.cmd test` en el [repositorio externo](https://github.com/JaimePalavecino/petcare-external-api#pruebas). |
+| Integración | Importa la [colección](postman/PetCare.postman_collection.json) y el [entorno](postman/PetCare_Local.postman_environment.json) en Postman. Ejecuta todas las solicitudes en orden, desde **Configuración e inicio de una corrida nueva**. |
+
+En Postman, `baseUrl` apunta a Spring y `externalUrl` a Node. Si ejecutas la colección desde el equipo 1, cambia `externalUrl` a la misma dirección del equipo 2 que usa Spring. Usa una base separada y Mailpit. Cada corrida genera datos ficticios y fechas futuras en la hora de Santiago. Mailpit debe capturar una confirmación, una cancelación y un aviso directo de E10.
+
+<details>
+<summary>Ejecutar la colección con Newman</summary>
+
+Con los servicios activos y el entorno de Postman ajustado a sus direcciones:
+
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21.0.12.1'
-.\gradlew.bat check
+npm.cmd exec --yes --package=newman@6.2.1 -- newman run postman/PetCare.postman_collection.json -e postman/PetCare_Local.postman_environment.json --timeout-request 5000 --timeout-script 5000 --timeout 90000
 ```
 
-Las pruebas verifican:
+</details>
 
-- Carga del contexto y controladores.
-- Creación HTTP de cliente, mascota, veterinario y reserva.
-- Rechazo HTTP de una reserva duplicada.
-- Confirmación de reserva y registro de atención médica.
-- Listados, filtros de agenda, límites del día, orden del historial y acceso después de bajas lógicas.
-- Códigos HTTP y formato ApiError, incluida la cabecera Allow y el tratamiento de fallos internos.
+<details>
+<summary>Pruebas de desarrollo en un solo computador</summary>
 
-La etapa 3 verificó `26` pruebas automatizadas aprobadas y el empaquetado `bootJar`. También se realizaron 95 comprobaciones HTTP con PostgreSQL y cuatro escenarios de concurrencia. El informe contiene contratos, resultados y configuración utilizada. [Informe de la etapa 3](docs/backend-etapa3.md)
+En desarrollo puedes iniciar PostgreSQL, Spring, Node y Mailpit en el mismo PC. Inicia Node con `HOST=127.0.0.1` y arranca Spring con `EXTERNAL_API_URL=http://127.0.0.1:3001`. El entorno **PetCare Local** de Postman ya trae esas direcciones.
 
-La etapa 4 añade pruebas de eventos transaccionales, rollback, recuperación, límites de reintentos, resultados inciertos y trabajadores concurrentes. Las pruebas Java utilizan H2 y mantienen desactivado el trabajador periódico para controlar cada ejecución. Node ejecuta su suite mediante `npm.cmd test` desde su repositorio. Los resultados finales y las evidencias SMTP están en el [informe de la etapa 4](docs/apis-externas-etapa4.md).
-
-## Postman
-
-Importar los dos archivos ubicados en `postman/`, seleccionar el entorno `PetCare Local` y ejecutar la colección completa en orden.
-
-`baseUrl` apunta a Spring y `externalUrl` al servicio Node. El diagnóstico inicial documenta una aserción pendiente en ubicación y el tratamiento de fechas de la colección. Los resultados de la separación se encuentran en [el informe de la etapa 2](docs/separacion-api-externa.md).
-
-## Nota sobre medicamentos
-
-Los datos del servicio Node son demostrativos para probar la integración técnica. No constituyen indicaciones médicas ni reemplazan el criterio profesional veterinario.
-
+</details>

@@ -34,7 +34,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -139,7 +139,7 @@ class PetcareApplicationTests {
 				}
 				""").body());
 
-		String fecha = LocalDateTime.now().plusDays(2).withSecond(0).withNano(0).toString();
+		String fecha = LocalDate.now(ZoneId.of("America/Santiago")).plusDays(2).atTime(10, 0).toString();
 		String reservaJson = """
 				{
 				  "mascotaId": %d,
@@ -171,7 +171,7 @@ class PetcareApplicationTests {
 				"Dra. Elena Soto", "Felinos", "elena@petcare.cl"));
 
 		ReservaResponse reserva = reservaService.crear(new ReservaRequest(
-				mascota.id(), veterinario.id(), LocalDateTime.now().plusDays(3)));
+				mascota.id(), veterinario.id(), LocalDate.now(ZoneId.of("America/Santiago")).plusDays(3).atTime(10, 0)));
 		ReservaResponse confirmada = reservaService.cambiarEstado(
 				reserva.id(), new EstadoReservaRequest(EstadoReserva.CONFIRMADA));
 		assertThat(confirmada.estado()).isEqualTo(EstadoReserva.CONFIRMADA);

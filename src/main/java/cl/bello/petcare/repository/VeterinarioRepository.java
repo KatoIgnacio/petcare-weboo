@@ -13,6 +13,8 @@ public interface VeterinarioRepository extends JpaRepository<Veterinario, Long> 
 
 	Optional<Veterinario> findByIdAndActivoTrue(Long id);
 
+	boolean existsByIdAndActivoTrue(Long id);
+
 	List<Veterinario> findByActivoTrueOrderByNombreAsc();
 
 	boolean existsByEmailIgnoreCase(String email);
