@@ -145,7 +145,7 @@ Las rutas **E01–E07** pertenecen a Spring (puerto `8082`); **E08–E10** perte
 | E06 | `PATCH` | `/api/reservas/{id}/estado` | `200` · Cambia el estado y devuelve el resultado inicial del aviso. |
 | E07 | `POST` | `/api/reservas/{id}/atencion` | `201` · Registra una atención. |
 | E08 | `GET` | `/api/medicamentos?nombre=AMOX` | `200` · Devuelve coincidencias por nombre. |
-| E09 | `GET` | `/api/ubicacion-clinica` | `200` · Devuelve dirección, coordenadas y enlace al mapa. |
+| E09 | `GET` | `/api/ubicacion-clinica` | `200` · Devuelve dirección, coordenadas y un enlace a Google Maps. |
 | E10 | `POST` | `/api/notificaciones` | `202` · Devuelve un recibo cuando SMTP acepta el correo. |
 
 <details>
